@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PhoneWheel</string>
+    <string name="app_status">PhoneWheel - Controlador Giroscópico</string>
+    <string name="app_description">Aplicação para controlar dispositivos via giroscópio do smartphone</string>
+</resources>

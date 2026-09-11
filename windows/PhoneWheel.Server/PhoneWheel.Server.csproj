@@ -7,4 +7,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- vJoy será integrado em futuras iterações -->
+  </ItemGroup>
+
 </Project>

@@ -20,12 +20,23 @@ import kotlin.math.absoluteValue
 class SteeringProcessor(
     private val minAngle: Float = -450f,
     private val maxAngle: Float = 450f,
-    var sensitivity: Float = 1.0f,
+    sensitivity: Float = 1.0f,
     var gyroAxis: GyroAxis = GyroAxis.X
 ) {
 
+    // Multiplicador de velocidade angular. Setter valida que o valor seja > 0.
+    var sensitivity: Float = sensitivity
+        set(value) {
+            if (value > 0) {
+                field = value
+            }
+        }
+
     // Ângulo acumulado em graus
     private var currentAngle = 0f
+
+    // Última velocidade angular bruta lida no eixo configurado (rad/s)
+    private var lastRawAngularVelocity = 0f
 
     // Tempo da última atualização (em milissegundos)
     private var lastUpdateTimeMs = System.currentTimeMillis()
@@ -53,6 +64,7 @@ class SteeringProcessor(
             GyroAxis.Y -> gyroY
             GyroAxis.Z -> gyroZ
         }
+        lastRawAngularVelocity = angularVelocityRadPerSec
 
         // Converter de radianos/segundo para graus/segundo
         val angularVelocityDegPerSec = Math.toDegrees(angularVelocityRadPerSec.toDouble()).toFloat()
@@ -81,6 +93,12 @@ class SteeringProcessor(
     fun getCurrentAngle(): Float = currentAngle
 
     /**
+     * Obtém a última velocidade angular bruta (rad/s) lida no eixo configurado,
+     * antes da integração. Útil para diagnóstico e para compor pacotes de rede.
+     */
+    fun getLastRawAngularVelocity(): Float = lastRawAngularVelocity
+
+    /**
      * Recentraliza o ângulo para zero.
      */
     fun recenter() {
@@ -100,37 +118,6 @@ class SteeringProcessor(
             else -> angle
         }
         lastUpdateTimeMs = System.currentTimeMillis()
-    }
-
-    /**
-     * Obtém o eixo do giroscópio atualmente utilizado.
-     */
-    fun getGyroAxis(): GyroAxis = gyroAxis
-
-    /**
-     * Altera o eixo do giroscópio a ser utilizado.
-     * Útil para testes com diferentes orientações do telefone.
-     *
-     * @param axis novo eixo (X, Y ou Z)
-     */
-    fun setGyroAxis(axis: GyroAxis) {
-        gyroAxis = axis
-    }
-
-    /**
-     * Obtém a sensibilidade atual (multiplicador de velocidade angular).
-     */
-    fun getSensitivity(): Float = sensitivity
-
-    /**
-     * Altera a sensibilidade do processador.
-     *
-     * @param newSensitivity novo valor de sensibilidade (deve ser > 0)
-     */
-    fun setSensitivity(newSensitivity: Float) {
-        if (newSensitivity > 0) {
-            sensitivity = newSensitivity
-        }
     }
 
     /**

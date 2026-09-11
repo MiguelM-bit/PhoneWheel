@@ -53,6 +53,12 @@ dependencies {
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
 
+    // Coroutines (envio de rede sem bloquear a UI)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // Lifecycle (lifecycleScope para coroutines atreladas ao ciclo de vida)
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

@@ -2,19 +2,20 @@ using System.Collections.Concurrent;
 using PhoneWheel.Server.Network;
 using PhoneWheel.Server.Input;
 using PhoneWheel.Server.VirtualController;
+using PhoneWheel.Server.Core;
 
 const int UDP_PORT = 5005;
 
-var server = new UdpServer(UDP_PORT);
+// Composição de dependências
 var calibrationManager = new CalibrationManager();
 var steeringProcessor = new SteeringProcessor(deadzone: 5.0, smoothingFactor: 0.2);
 var vjoyController = new VJoyController(deviceId: 1);
+var steeringPipeline = new SteeringPipeline(calibrationManager, steeringProcessor, vjoyController);
+var server = new UdpServer(UDP_PORT);
+
 var deviceConnections = new ConcurrentDictionary<string, (DateTimeOffset LastSeen, int PacketCount)>();
 
-Console.WriteLine("╔════════════════════════════════════════════╗");
-Console.WriteLine("║        PhoneWheel.Server v1.0             ║");
-Console.WriteLine("╚════════════════════════════════════════════╝");
-Console.WriteLine();
+ServerLogger.PrintBanner();
 
 // Subscrever aos eventos do servidor
 server.SteeringDataReceived += (sender, args) =>
@@ -27,76 +28,52 @@ server.SteeringDataReceived += (sender, args) =>
         (_, existing) => (DateTimeOffset.UtcNow, existing.PacketCount + 1)
     );
 
-    var packet = args.Packet;
+    // Pipeline processa o pacote completamente
+    var result = steeringPipeline.Process(args.Packet);
 
-    // 1. Aplicar calibração
-    var calibratedAngle = calibrationManager.ApplyCalibration(packet.Angle);
-
-    // 2. Processar (deadzone, limitar, suavizar, normalizar)
-    var normalizedValue = steeringProcessor.Process(calibratedAngle);
-
-    // 3. Enviar para o controle virtual
-    try
-    {
-        vjoyController.SetSteering(normalizedValue);
-    }
-    catch (VirtualControllerException ex)
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"[ERR] Erro ao enviar para vJoy: {ex.Message}");
-        Console.ResetColor();
-    }
-
-    // 4. Exibir dados
-    Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Android: {ipKey}");
-    Console.WriteLine($"  ├─ Ângulo recebido:   {packet.Angle:F2}°");
-    Console.WriteLine($"  ├─ Ângulo calibrado:  {calibratedAngle:F2}°");
-    Console.WriteLine($"  ├─ Valor normalizado: {normalizedValue:F4}");
-    Console.WriteLine($"  ├─ vJoy Status:       {vjoyController.Status}");
-    Console.WriteLine($"  ├─ Gyro:              {packet.Gyro:F4} rad/s");
-    Console.WriteLine($"  └─ Timestamp:         {packet.Timestamp}ms");
+    // Logging
+    ServerLogger.LogSteeringData(ipKey, result);
 };
 
 server.InvalidPacketReceived += (sender, args) =>
 {
-    Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] [WARN] Pacote inválido de {args.RemoteEndPoint.Address}");
-    Console.WriteLine($"  └─ Motivo: {args.Reason}");
-    Console.ResetColor();
+    ServerLogger.LogInvalidPacket(args.RemoteEndPoint.Address.ToString(), args.Reason);
 };
 
 try
 {
-    Console.WriteLine($"[INFO] Iniciando servidor UDP na porta {UDP_PORT}...\n");
+    ServerLogger.Info("Iniciando servidor UDP na porta {0}...", UDP_PORT);
+    ServerLogger.Info("");
     
     // Conectar ao vJoy
     try
     {
         vjoyController.Connect();
-        Console.WriteLine($"[OK] Controlador virtual conectado (Status: {vjoyController.Status})\n");
+        ServerLogger.Success("Controlador virtual conectado (Status: {0})", vjoyController.Status);
+        ServerLogger.Info("");
     }
     catch (VirtualControllerException ex)
     {
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine($"[WARN] Não foi possível conectar ao vJoy: {ex.Message}");
-        Console.WriteLine($"       O servidor continuará funcionando, mas sem enviar dados ao vJoy.\n");
-        Console.ResetColor();
+        ServerLogger.Warning("Não foi possível conectar ao vJoy: {0}", ex.Message);
+        ServerLogger.Warning("O servidor continuará funcionando, mas sem enviar dados ao vJoy.");
+        ServerLogger.Info("");
     }
     
     await server.StartAsync();
-    Console.WriteLine($"[OK] Servidor aguardando pacotes de Android...");
-    Console.WriteLine($"[OK] Calibração: offset = {calibrationManager.CenterOffset:F2}°");
-    Console.WriteLine($"[OK] Deadzone: {steeringProcessor.GetInfo().Deadzone:F2}°");
-    Console.WriteLine($"[OK] Suavização: {steeringProcessor.GetInfo().SmoothingFactor:P0}\n");
+    ServerLogger.Success("Servidor aguardando pacotes de Android...");
+    
+    var diagnostics = steeringPipeline.GetDiagnosticInfo();
+    ServerLogger.Success("Calibração: offset = {0:F2}°", diagnostics.CalibrationOffset);
+    ServerLogger.Success("Deadzone: {0:F2}°", diagnostics.SteeringProcessorInfo?.Deadzone ?? 0);
+    ServerLogger.Success("Suavização: {0:P0}", diagnostics.SteeringProcessorInfo?.SmoothingFactor ?? 0);
+    ServerLogger.Info("");
 
     // Manter o servidor rodando até Ctrl+C
     await Task.Delay(Timeout.Infinite);
 }
 catch (Exception ex)
 {
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine($"[ERR] {ex.Message}");
-    Console.ResetColor();
+    ServerLogger.Error("{0}", ex.Message);
     Environment.Exit(1);
 }
 finally
@@ -110,5 +87,5 @@ finally
     
     await server.StopAsync();
     server.Dispose();
-    Console.WriteLine("\n[INFO] Servidor encerrado.");
+    ServerLogger.Info("Servidor encerrado.");
 }

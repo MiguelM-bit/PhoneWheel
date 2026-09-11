@@ -1,0 +1,217 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using PhoneWheel.Server.Models;
+
+namespace PhoneWheel.Server.Network;
+
+/// <summary>
+/// Servidor UDP responsável por escutar e processar pacotes de direção do aplicativo Android.
+///
+/// Responsabilidades:
+/// - abrir a porta UDP configurada;
+/// - escutar pacotes continuamente;
+/// - desserializar e validar JSON;
+/// - identificar o IP do dispositivo remetente;
+/// - disponibilizar os pacotes validados para processamento;
+/// - tratar pacotes inválidos sem encerrar o servidor;
+/// - permitir iniciar e parar o servidor de forma assíncrona.
+///
+/// Este componente:
+/// - NÃO contém lógica de processamento (direção, cálculos);
+/// - NÃO acessa vJoy ou controle virtual;
+/// - NÃO implementa interface gráfica.
+/// </summary>
+public class UdpServer : IDisposable
+{
+    private readonly int _port;
+    private UdpClient? _udpClient;
+    private CancellationTokenSource? _cancellationTokenSource;
+    private Task? _listeningTask;
+    private bool _disposed;
+
+    /// <summary>
+    /// Evento disparado quando um pacote válido é recebido.
+    /// </summary>
+    public event EventHandler<SteeringDataReceivedEventArgs>? SteeringDataReceived;
+
+    /// <summary>
+    /// Evento disparado quando um pacote inválido é recebido.
+    /// </summary>
+    public event EventHandler<InvalidPacketEventArgs>? InvalidPacketReceived;
+
+    /// <summary>
+    /// Inicializa uma nova instância do servidor UDP.
+    /// </summary>
+    /// <param name="port">Porta UDP na qual escutar (ex: 5005).</param>
+    public UdpServer(int port = 5005)
+    {
+        _port = port;
+    }
+
+    /// <summary>
+    /// Inicia o servidor e começa a escutar pacotes.
+    /// </summary>
+    /// <returns>Uma tarefa que representa a operação de início do servidor.</returns>
+    public Task StartAsync()
+    {
+        if (_udpClient != null)
+        {
+            throw new InvalidOperationException("Servidor já está em execução.");
+        }
+
+        _udpClient = new UdpClient(_port);
+        _cancellationTokenSource = new CancellationTokenSource();
+
+        _listeningTask = ListenAsync(_cancellationTokenSource.Token);
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Para o servidor e libera recursos.
+    /// </summary>
+    /// <returns>Uma tarefa que representa a operação de parada do servidor.</returns>
+    public async Task StopAsync()
+    {
+        if (_udpClient == null)
+        {
+            return;
+        }
+
+        _cancellationTokenSource?.Cancel();
+
+        if (_listeningTask != null)
+        {
+            try
+            {
+                await _listeningTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Esperado quando cancelamos
+            }
+        }
+
+        _udpClient.Dispose();
+        _udpClient = null;
+        _cancellationTokenSource?.Dispose();
+        _cancellationTokenSource = null;
+    }
+
+    /// <summary>
+    /// Loop de escuta contínuo de pacotes UDP.
+    /// </summary>
+    private async Task ListenAsync(CancellationToken cancellationToken)
+    {
+        if (_udpClient == null)
+        {
+            return;
+        }
+
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    var result = await _udpClient.ReceiveAsync(cancellationToken).ConfigureAwait(false);
+
+                    ProcessReceivedData(result.Buffer, result.RemoteEndPoint);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    // Log de erro sem encerrar o loop
+                    Console.WriteLine($"[Erro ao receber pacote] {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            // Cleanup adicional se necessário
+        }
+    }
+
+    /// <summary>
+    /// Processa dados brutos recebidos de um endpoint.
+    /// </summary>
+    private void ProcessReceivedData(byte[] data, IPEndPoint remoteEndPoint)
+    {
+        if (data.Length == 0)
+        {
+            InvalidPacketReceived?.Invoke(this, new InvalidPacketEventArgs
+            {
+                RemoteEndPoint = remoteEndPoint,
+                Reason = "Pacote vazio"
+            });
+            return;
+        }
+
+        string jsonData;
+        try
+        {
+            jsonData = Encoding.UTF8.GetString(data);
+        }
+        catch (Exception ex)
+        {
+            InvalidPacketReceived?.Invoke(this, new InvalidPacketEventArgs
+            {
+                RemoteEndPoint = remoteEndPoint,
+                Reason = $"Erro ao decodificar UTF-8: {ex.Message}"
+            });
+            return;
+        }
+
+        if (!PacketParser.TryParse(jsonData, out var packet) || packet == null)
+        {
+            InvalidPacketReceived?.Invoke(this, new InvalidPacketEventArgs
+            {
+                RemoteEndPoint = remoteEndPoint,
+                Reason = "Pacote JSON inválido ou malformado"
+            });
+            return;
+        }
+
+        // Pacote válido
+        SteeringDataReceived?.Invoke(this, new SteeringDataReceivedEventArgs
+        {
+            RemoteEndPoint = remoteEndPoint,
+            Packet = packet
+        });
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        StopAsync().Wait();
+        _disposed = true;
+    }
+}
+
+/// <summary>
+/// Argumentos de evento para pacotes válidos recebidos.
+/// </summary>
+public class SteeringDataReceivedEventArgs : EventArgs
+{
+    public required IPEndPoint RemoteEndPoint { get; init; }
+
+    public required SteeringPacket Packet { get; init; }
+}
+
+/// <summary>
+/// Argumentos de evento para pacotes inválidos recebidos.
+/// </summary>
+public class InvalidPacketEventArgs : EventArgs
+{
+    public required IPEndPoint RemoteEndPoint { get; init; }
+
+    public required string Reason { get; init; }
+}

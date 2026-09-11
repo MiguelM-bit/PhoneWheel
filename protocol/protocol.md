@@ -2,56 +2,86 @@
 
 ## 📡 Visão Geral
 
-A comunicação entre o aplicativo Android e o servidor Windows é realizada via **UDP (User Datagram Protocol)**.
+A comunicação entre o aplicativo Android e o servidor Windows é realizada via **UDP (User Datagram Protocol)**, utilizando mensagens no formato **JSON UTF-8**.
 
 ## 🔌 Especificações Básicas
 
 - **Protocolo**: UDP
 - **Camada**: Transporte (Camada 4 - OSI)
-- **Características**: 
+- **Porta padrão**: `5005`
+- **Formato inicial**: JSON UTF-8
+- **Características**:
   - Sem conexão
   - Baixa latência
   - Ideal para aplicações em tempo real
   - Sem garantia de entrega, mas com velocidade
 
-## 📊 Razão da Escolha
+## 📊 Razão da Escolha do UDP
 
 UDP foi escolhido por:
-1. **Baixa latência** - Essencial para controle em tempo real
+1. **Baixa latência** - Essencial para controle em tempo real; ao contrário do TCP, não há handshake, controle de congestionamento ou espera por confirmação de entrega
 2. **Simplicidade** - Implementação direta em ambas plataformas
 3. **Performance** - Menos overhead que TCP
-4. **Adequação** - Perda ocasional de pacotes é aceitável para controle de entrada
+4. **Adequação** - Perda ocasional de pacotes é aceitável para controle de entrada, já que um novo pacote com dados mais recentes chega em seguida
 
-## 📋 Estrutura de Pacotes
+> **Nota sobre evolução futura**: O formato JSON foi escolhido para esta fase inicial por ser simples de implementar, ler e depurar. Futuramente, o protocolo poderá ser otimizado para um **formato binário** (por exemplo, campos de tamanho fixo serializados diretamente em bytes), reduzindo o tamanho dos pacotes e o overhead de parsing, uma vez que a comunicação e os dados estejam estabilizados.
 
-*A ser definida em versões posteriores do projeto*
+## 📦 Pacote: `steering`
 
-Serão documentados:
-- [ ] Formato de pacotes UDP
-- [ ] Estrutura de headers customizados
-- [ ] Tipos de mensagens (gyroscope data, commands, acknowledgments)
-- [ ] Codificação de dados (JSON, binary, protobuf, etc.)
-- [ ] Tamanho máximo de pacotes
-- [ ] Checksums ou validação
+Este é o primeiro tipo de pacote definido no protocolo. Representa o estado atual da direção calculado pelo aplicativo Android, enviado periodicamente ao servidor Windows.
+
+### Formato
+
+```json
+{
+  "type": "steering",
+  "angle": 137.4,
+  "gyro": -0.52,
+  "timestamp": 123456789
+}
+```
+
+### Descrição dos Campos
+
+| Campo       | Tipo   | Unidade                  | Descrição                                                                 |
+|-------------|--------|--------------------------|----------------------------------------------------------------------------|
+| `type`      | string | -                        | Identifica o tipo de mensagem. Para este pacote, o valor é sempre `"steering"`. Permite que o receptor distinga diferentes tipos de mensagens no futuro. |
+| `angle`     | float  | graus (°)                | Ângulo de direção acumulado, calculado pelo `SteeringProcessor` a partir da integração da velocidade angular do giroscópio ao longo do tempo. Varia dentro do intervalo configurado (inicialmente `-450°` a `+450°`). |
+| `gyro`      | float  | radianos por segundo (rad/s) | Velocidade angular instantânea lida diretamente do sensor de giroscópio no eixo configurado (X, Y ou Z), antes da integração. Representa o dado "bruto" no momento do envio. |
+| `timestamp` | long   | milissegundos (ms) desde a época Unix (Unix epoch) | Momento em que o pacote foi gerado no dispositivo Android. Usado para identificar a ordem/recência dos pacotes e permitir que o receptor descarte pacotes atrasados ou fora de ordem. |
+
+### Observações sobre os Campos
+
+- **`angle`**: representa o estado já processado (integrado), pronto para ser interpretado como a posição do "volante".
+- **`gyro`**: representa o dado bruto do sensor, útil para diagnóstico, calibração e depuração no lado do servidor.
+- **`timestamp`**: não é sincronizado entre dispositivos (relógio local do Android). Deve ser usado apenas para comparação relativa entre pacotes recebidos da mesma origem, não como tempo absoluto confiável.
+
+## 🚦 Comportamento Esperado ao Processar Pacotes
+
+- Cada pacote UDP recebido deve ser tratado como uma **mensagem independente e completa** (stateless).
+- Se um pacote não puder ser processado (JSON malformado, campo ausente, tipo desconhecido, valor fora do esperado, etc.), o receptor deve:
+  1. **Descartar o pacote silenciosamente** (sem interromper o serviço ou travar o listener);
+  2. Opcionalmente registrar um log de diagnóstico (nível debug/warning) para auxiliar na investigação de problemas;
+  3. Continuar aguardando o próximo pacote normalmente.
+- Nenhuma resposta de erro é enviada de volta ao Android nesta fase — a comunicação é unidirecional (Android → Windows) e sem confirmação (sem ACK).
+- Pacotes fora de ordem ou atrasados podem ser ignorados pelo receptor com base no campo `timestamp`, a critério da implementação futura do servidor.
 
 ## 🔄 Fluxo de Comunicação
-
-*A ser definido em versões posteriores do projeto*
 
 ```
 [Android App]
      ↓
-[Sensor de Giroscópio]
+[Sensor de Giroscópio] → [SteeringProcessor]
      ↓
-[Formato de Pacote UDP]
+[Montagem do pacote JSON "steering"]
      ↓
-[Envio via UDP Socket]
+[Envio via UDP Socket → porta 5005]
      ↓
 [Windows Server - UDP Listener]
      ↓
-[Processamento de Dados]
+[Parsing e validação do pacote]
      ↓
-[Ação (Mouse/Teclado/Outro)]
+[Processamento de Dados] (definido em fase posterior)
 ```
 
 ## 🔐 Segurança
@@ -66,9 +96,10 @@ Considerações futuras:
 ## 📝 Notas
 
 - Ambos os componentes devem estar na mesma rede local
-- A porta UDP será definida durante a implementação
+- Porta UDP padrão: `5005`
 - Configurações de timeout e retry serão estabelecidas conforme necessário
+- Este documento cobre apenas a definição do protocolo; a implementação de rede (sockets, envio/recebimento) será feita em etapas posteriores
 
 ---
 
-**Status**: Documentação inicial | **Versão**: 0.1.0 | **Data**: 2025
+**Status**: Protocolo inicial definido | **Versão**: 0.2.0 | **Data**: 2025

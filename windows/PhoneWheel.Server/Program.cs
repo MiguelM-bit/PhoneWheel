@@ -41,13 +41,27 @@ ServerLogger.PrintBanner();
 // Subscrever aos eventos do watchdog
 watchdog.ConnectionLost += (sender, args) =>
 {
-    ServerLogger.Warning("Conexão perdida! Nenhum pacote recebido por {0} ms", args.ElapsedMilliseconds);
-    ServerLogger.Info("Volante centralizado (segurança)");
+    try
+    {
+        ServerLogger.Warning("Conexão perdida! Nenhum pacote recebido por {0} ms", args.ElapsedMilliseconds);
+        ServerLogger.Info("Volante centralizado (segurança)");
+    }
+    catch
+    {
+        // Ignorar erros de logging
+    }
 };
 
 watchdog.ConnectionRestored += (sender, args) =>
 {
-    ServerLogger.Success("Conexão restaurada! Voltando a receber pacotes");
+    try
+    {
+        ServerLogger.Success("Conexão restaurada! Voltando a receber pacotes");
+    }
+    catch
+    {
+        // Ignorar erros de logging
+    }
 };
 
 // Subscrever aos eventos do servidor

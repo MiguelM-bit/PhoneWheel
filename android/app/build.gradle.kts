@@ -1,5 +1,5 @@
 plugins {
-    id("com.android.application") version "8.2.0"
+    id("com.android.application") version "8.13.2"
     kotlin("android") version "1.9.22"
 }
 
@@ -46,6 +46,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+
+    // Material Design
+    implementation("com.google.android.material:material:1.11.0")
 
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")

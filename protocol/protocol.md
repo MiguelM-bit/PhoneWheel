@@ -56,7 +56,117 @@ Este é o primeiro tipo de pacote definido no protocolo. Representa o estado atu
 - **`gyro`**: representa o dado bruto do sensor, útil para diagnóstico, calibração e depuração no lado do servidor.
 - **`timestamp`**: não é sincronizado entre dispositivos (relógio local do Android). Deve ser usado apenas para comparação relativa entre pacotes recebidos da mesma origem, não como tempo absoluto confiável.
 
-## 🚦 Comportamento Esperado ao Processar Pacotes
+---
+
+## 📦 Pacote: `connect` (Handshake)
+
+Enviado pelo Android quando o usuário pressiona "Conectar". Inicia o handshake com o servidor Windows.
+
+### Formato
+
+```json
+{
+  "type": "connect",
+  "device": "PhoneWheel",
+  "version": "2.0",
+  "timestamp": 123456789
+}
+```
+
+### Descrição dos Campos
+
+| Campo       | Tipo   | Descrição                                                    |
+|-------------|--------|--------------------------------------------------------------|
+| `type`      | string | Sempre `"connect"` para pacotes de handshake inicial         |
+| `device`    | string | Identificador do dispositivo (`"PhoneWheel"`)                |
+| `version`   | string | Versão do protocolo (ex: `"2.0"`)                            |
+| `timestamp` | long   | Timestamp local do Android em milissegundos                  |
+
+### Comportamento Esperado
+
+1. **Android** envia `connect` repetidamente até receber resposta
+2. **Windows** responde com `connect_ack` confirmando a conexão
+3. **Android** aguarda `connect_ack` por timeout configurável (ex: 5 segundos)
+4. Se resposta não chegar, o Android permanece em estado `DISCONNECTED`
+
+---
+
+## 📦 Pacote: `connect_ack` (Resposta de Handshake)
+
+Enviado pelo Windows em resposta a um `connect`. Confirma que o servidor está ativo e pronto para receber dados.
+
+### Formato
+
+```json
+{
+  "type": "connect_ack",
+  "device": "PhoneWheel",
+  "version": "2.0",
+  "timestamp": 123456789
+}
+```
+
+### Descrição dos Campos
+
+| Campo       | Tipo   | Descrição                                          |
+|-------------|--------|--------------------------------------------------|
+| `type`      | string | Sempre `"connect_ack"`                           |
+| `device`    | string | Eco do identificador do dispositivo               |
+| `version`   | string | Versão do protocolo suportada pelo Windows        |
+| `timestamp` | long   | Timestamp do servidor Windows em milissegundos    |
+
+### Observações
+
+- **Windows** usa `connect_ack` para informar ao Android que está ativo e pronto
+- O IP do cliente é extraído do endereço remoto do socket UDP
+- Apenas uma resposta por `connect` é suficiente para Android considerar conectado
+- Se Android receber múltiplos `connect_ack`, apenas o primeiro é processado
+
+---
+
+## 🔄 Fluxo de Comunicação Completo
+
+```
+┌─────────────────┐                          ┌──────────────────┐
+│   Android App   │                          │  Windows Server  │
+└────────┬────────┘                          └────────┬─────────┘
+         │                                            │
+         │ Usuário pressiona "Conectar"               │
+         │                                            │
+         │─────────────── CONNECT ──────────────────→ │
+         │                                            │
+         │─────────────── CONNECT ──────────────────→ │ (retry)
+         │                                            │ (valida)
+         │                                            │ (registra IP)
+         │ ← ─────────────── CONNECT_ACK ─────────────│
+         │                                            │
+         │ (marca como CONNECTED)                     │
+         │ (aguarda steering)                         │ (aguarda steering)
+         │                                            │
+         │─────────────── STEERING ──────────────────→ │
+         │─────────────── STEERING ──────────────────→ │
+         │─────────────── STEERING ──────────────────→ │
+
+```
+
+---
+
+## 🚦 Estados de Conexão
+
+### Android
+- **DISCONNECTED**: Não conectado, aguardando ação do usuário
+- **CONNECTING**: Enviando CONNECT, aguardando resposta
+- **CONNECTED**: Handshake completo, enviando STEERING
+- **CONNECTION_LOST**: Perda de conexão detectada
+
+### Windows
+- **LISTENING**: Aguardando CONNECT de cliente
+- **CONNECTED**: Dispositivo conectado, recebendo STEERING
+- **TIMEOUT**: Nenhum pacote recebido por período configurado
+
+---
+
+## 🔄 Comportamento Esperado ao Processar Pacotes
 
 - Cada pacote UDP recebido deve ser tratado como uma **mensagem independente e completa** (stateless).
 - Se um pacote não puder ser processado (JSON malformado, campo ausente, tipo desconhecido, valor fora do esperado, etc.), o receptor deve:
@@ -65,6 +175,7 @@ Este é o primeiro tipo de pacote definido no protocolo. Representa o estado atu
   3. Continuar aguardando o próximo pacote normalmente.
 - Nenhuma resposta de erro é enviada de volta ao Android nesta fase — a comunicação é unidirecional (Android → Windows) e sem confirmação (sem ACK).
 - Pacotes fora de ordem ou atrasados podem ser ignorados pelo receptor com base no campo `timestamp`, a critério da implementação futura do servidor.
+
 
 ## 🔄 Fluxo de Comunicação
 

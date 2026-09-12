@@ -20,10 +20,8 @@ public static class PacketParser
 
     /// <summary>
     /// Tenta desserializar um pacote JSON e validá-lo segundo o protocolo.
+    /// Retorna verdadeiro se for um pacote de steering válido.
     /// </summary>
-    /// <param name="jsonData">Conteúdo UTF-8 do pacote.</param>
-    /// <param name="packet">Pacote desserializado, se bem-sucedido; null caso contrário.</param>
-    /// <returns>true se o pacote é válido; false caso contrário.</returns>
     public static bool TryParse(string jsonData, out SteeringPacket? packet)
     {
         packet = null;
@@ -84,6 +82,84 @@ public static class PacketParser
         }
     }
 
+    /// <summary>
+    /// Tenta desserializar um pacote de conexão (CONNECT).
+    /// </summary>
+    public static bool TryParseConnect(string jsonData, out ConnectPacket? packet)
+    {
+        packet = null;
+
+        if (string.IsNullOrWhiteSpace(jsonData))
+        {
+            return false;
+        }
+
+        try
+        {
+            var deserialized = JsonSerializer.Deserialize<ConnectPacketDto>(jsonData, JsonOptions);
+
+            if (deserialized == null)
+            {
+                return false;
+            }
+
+            // Validar campos obrigatórios
+            if (string.IsNullOrWhiteSpace(deserialized.Type) || deserialized.Type != ConnectPacket.TypeConnect)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(deserialized.Device) || deserialized.Device != "PhoneWheel")
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(deserialized.Version))
+            {
+                return false;
+            }
+
+            if (deserialized.Timestamp < 0)
+            {
+                return false;
+            }
+
+            packet = new ConnectPacket
+            {
+                Type = deserialized.Type,
+                Device = deserialized.Device,
+                Version = deserialized.Version,
+                Timestamp = deserialized.Timestamp
+            };
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Serializa um pacote de conexão (CONNECT_ACK) para JSON.
+    /// </summary>
+    public static string SerializeConnectAck(ConnectAckPacket packet)
+    {
+        var dto = new ConnectAckPacketDto
+        {
+            Type = packet.Type,
+            Device = packet.Device,
+            Version = packet.Version,
+            Timestamp = packet.Timestamp
+        };
+
+        return JsonSerializer.Serialize(dto, JsonOptions);
+    }
+
     private static bool IsValidAngle(double angle)
     {
         return !double.IsNaN(angle) && !double.IsInfinity(angle);
@@ -104,6 +180,36 @@ public static class PacketParser
 
         [JsonPropertyName("gyro")]
         public double Gyro { get; set; }
+
+        [JsonPropertyName("timestamp")]
+        public long Timestamp { get; set; }
+    }
+
+    private class ConnectPacketDto
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = "";
+
+        [JsonPropertyName("device")]
+        public string Device { get; set; } = "";
+
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = "";
+
+        [JsonPropertyName("timestamp")]
+        public long Timestamp { get; set; }
+    }
+
+    private class ConnectAckPacketDto
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = "";
+
+        [JsonPropertyName("device")]
+        public string Device { get; set; } = "";
+
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = "";
 
         [JsonPropertyName("timestamp")]
         public long Timestamp { get; set; }

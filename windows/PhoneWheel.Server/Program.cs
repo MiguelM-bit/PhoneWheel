@@ -4,6 +4,7 @@ using PhoneWheel.Server.Input;
 using PhoneWheel.Server.VirtualController;
 using PhoneWheel.Server.Connection;
 using PhoneWheel.Server.Services;
+using PhoneWheel.Server.Models;
 
 const int UDP_PORT = 5005;
 const long WATCHDOG_TIMEOUT_MS = 500; // Timeout de conexão: 500 ms
@@ -18,7 +19,8 @@ var server = new UdpServer(UDP_PORT);
 // Watchdog para detectar desconexões
 var watchdog = new ConnectionWatchdog(vjoyController, WATCHDOG_TIMEOUT_MS);
 
-var deviceConnections = new ConcurrentDictionary<string, (DateTimeOffset LastSeen, int PacketCount)>();
+// Registro de clientes conectados (IP -> informações de conexão)
+var connectedClients = new ConcurrentDictionary<string, ClientInfo>();
 
 // Task para verificar watchdog periodicamente
 var watchdogCheckTask = Task.Run(async () =>
@@ -65,6 +67,43 @@ watchdog.ConnectionRestored += (sender, args) =>
     }
 };
 
+// Responder a pedidos de handshake (CONNECT)
+server.ConnectPacketReceived += (sender, args) =>
+{
+    try
+    {
+        var clientIp = args.RemoteEndPoint.Address.ToString();
+        
+        // Registrar ou atualizar cliente conectado
+        connectedClients.AddOrUpdate(
+            clientIp,
+            new ClientInfo
+            {
+                ConnectedAt = DateTimeOffset.UtcNow,
+                LastPacketAt = DateTimeOffset.UtcNow,
+                SteeringPacketCount = 0
+            },
+            (_, existing) => existing with { LastPacketAt = DateTimeOffset.UtcNow }
+        );
+
+        ServerLogger.Success("CONNECT recebido de {0}:{1}", clientIp, args.RemoteEndPoint.Port);
+
+        // Enviar resposta (CONNECT_ACK) de forma assíncrona
+        _ = server.SendConnectAckAsync(args.RemoteEndPoint, new ConnectAckPacket
+        {
+            Device = "PhoneWheel",
+            Version = "2.0",
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        });
+
+        ServerLogger.Info("CONNECT_ACK enviado para {0}:{1}", clientIp, args.RemoteEndPoint.Port);
+    }
+    catch (Exception ex)
+    {
+        ServerLogger.Error("Erro ao processar CONNECT: {0}", ex.Message);
+    }
+};
+
 // Subscrever aos eventos do servidor
 server.SteeringDataReceived += (sender, args) =>
 {
@@ -72,10 +111,24 @@ server.SteeringDataReceived += (sender, args) =>
     {
         var ipKey = args.RemoteEndPoint.Address.ToString();
         
-        deviceConnections.AddOrUpdate(
+        // Apenas processar steering de clientes autenticados
+        if (!connectedClients.TryGetValue(ipKey, out var clientInfo))
+        {
+            // Cliente enviou steering mas não fez handshake
+            ServerLogger.Warning("Steering recebido de {0}:{1}, mas cliente não está autenticado", 
+                ipKey, args.RemoteEndPoint.Port);
+            return;
+        }
+
+        // Atualizar informações do cliente
+        connectedClients.TryUpdate(
             ipKey,
-            (DateTimeOffset.UtcNow, 1),
-            (_, existing) => (DateTimeOffset.UtcNow, existing.PacketCount + 1)
+            clientInfo with 
+            { 
+                LastPacketAt = DateTimeOffset.UtcNow,
+                SteeringPacketCount = clientInfo.SteeringPacketCount + 1
+            },
+            clientInfo
         );
 
         // Registrar no watchdog
@@ -131,6 +184,7 @@ try
     
     await server.StartAsync();
     ServerLogger.Success("Servidor aguardando pacotes de Android...");
+    ServerLogger.Success("Handshake de conexão ativo (CONNECT → CONNECT_ACK)");
     ServerLogger.Success("Watchdog de conexão ativo (detecta timeout após {0} ms de silêncio)", WATCHDOG_TIMEOUT_MS);
     
     var diagnostics = steeringPipeline.GetDiagnosticInfo();

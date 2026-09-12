@@ -1,6 +1,7 @@
 package com.phonewheel.network
 
 import com.phonewheel.model.SteeringPacket
+import com.phonewheel.model.ConnectAckPacket
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -10,26 +11,21 @@ import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.SocketTimeoutException
 
 /**
- * Cliente UDP responsável por enviar pacotes de direção para o servidor Windows.
+ * Cliente UDP responsável por enviar e receber pacotes de direção.
  *
  * Responsabilidades:
  * - Manter um "endereço lógico" (IP + porta) configurado para envio;
- * - Abrir/fechar o socket UDP (iniciar/parar a comunicação);
- * - Serializar e enviar [SteeringPacket] via datagrama UDP;
+ * - Abrir/fechar o socket UDP;
+ * - Serializar e enviar pacotes;
+ * - Receber e desserializar pacotes de resposta;
  * - Expor o estado atual da conexão;
- * - Tratar erros de rede sem propagar exceções para quem chama, evitando
- *   travar a interface.
- *
- * Esta classe não lê o giroscópio, não calcula ângulo, não possui código de
- * interface e não conhece detalhes do lado Windows. Toda comunicação de rede
- * é feita em `Dispatchers.IO`, portanto os métodos suspensos são seguros para
- * serem chamados a partir de uma coroutine na thread principal (ex.: via
- * `lifecycleScope`).
+ * - Tratar erros de rede sem propagar exceções.
  */
 class UdpClient(
-    private val serializer: SteeringPacketSerializer = SteeringPacketSerializer()
+    private val serializer: PacketSerializer = PacketSerializer()
 ) {
 
     private var socket: DatagramSocket? = null
@@ -37,66 +33,46 @@ class UdpClient(
     private var remotePort: Int = 0
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
-
-    /** Estado observável da conexão, para ser exibido pela UI. */
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    /** Última mensagem de erro registrada, disponível para diagnóstico. */
     var lastError: String? = null
         private set
 
-    /**
-     * Inicia a comunicação: resolve o host informado e abre o socket UDP.
-     *
-     * Não lança exceções; falhas são refletidas em [connectionState] (valor
-     * [ConnectionState.ERROR]) e em [lastError].
-     *
-     * @param host endereço IP (ou hostname) do servidor Windows
-     * @param port porta UDP de destino (padrão do protocolo: 5005)
-     * @return true se a conexão foi estabelecida com sucesso
-     */
     suspend fun connect(host: String, port: Int): Boolean = withContext(Dispatchers.IO) {
         disconnectInternal()
 
         if (host.isBlank() || port !in 1..65535) {
             lastError = "Endereço ou porta inválidos"
-            _connectionState.value = ConnectionState.ERROR
+            _connectionState.value = ConnectionState.DISCONNECTED
             return@withContext false
         }
 
         try {
             remoteAddress = InetAddress.getByName(host)
             remotePort = port
-            socket = DatagramSocket()
+            socket = DatagramSocket().apply {
+                soTimeout = 5000 // 5 segundos para receber resposta
+            }
             lastError = null
             _connectionState.value = ConnectionState.CONNECTED
             true
         } catch (e: IOException) {
             lastError = e.message ?: "Falha ao conectar"
-            _connectionState.value = ConnectionState.ERROR
+            _connectionState.value = ConnectionState.DISCONNECTED
             disconnectInternal()
             false
         }
     }
 
-    /**
-     * Para a comunicação e libera o socket UDP.
-     *
-     * Não é uma função suspensa: fechar o socket é uma operação local rápida
-     * (não realiza I/O de rede), podendo ser chamada com segurança inclusive
-     * durante o encerramento da Activity.
-     */
     fun disconnect() {
         disconnectInternal()
         _connectionState.value = ConnectionState.DISCONNECTED
     }
 
+    fun isConnected(): Boolean = _connectionState.value == ConnectionState.CONNECTED
+
     /**
-     * Serializa e envia um pacote de direção para o destino configurado.
-     *
-     * Se não houver conexão ativa, ou se ocorrer um erro de rede, o envio é
-     * ignorado e o erro é registrado em [lastError] — nenhuma exceção é
-     * propagada para o chamador.
+     * Envia um pacote de steering
      */
     suspend fun send(packet: SteeringPacket) = withContext(Dispatchers.IO) {
         val currentSocket = socket
@@ -107,19 +83,63 @@ class UdpClient(
         }
 
         try {
-            val payload = serializer.serialize(packet)
+            val payload = serializer.serializeSteering(packet)
             val datagramPacket = DatagramPacket(payload, payload.size, currentAddress, remotePort)
             currentSocket.send(datagramPacket)
         } catch (e: IOException) {
             lastError = e.message ?: "Falha ao enviar pacote"
-            _connectionState.value = ConnectionState.ERROR
+            _connectionState.value = ConnectionState.DISCONNECTED
         }
     }
 
     /**
-     * Verifica se o cliente está atualmente conectado.
+     * Envia pacote de conexão (handshake)
      */
-    fun isConnected(): Boolean = _connectionState.value == ConnectionState.CONNECTED
+    suspend fun sendConnect(connectPacket: com.phonewheel.model.ConnectPacket): Boolean = withContext(Dispatchers.IO) {
+        val currentSocket = socket
+        val currentAddress = remoteAddress
+
+        if (currentSocket == null || currentAddress == null) {
+            lastError = "Socket não inicializado"
+            return@withContext false
+        }
+
+        try {
+            val payload = serializer.serializeConnect(connectPacket)
+            val datagramPacket = DatagramPacket(payload, payload.size, currentAddress, remotePort)
+            currentSocket.send(datagramPacket)
+            true
+        } catch (e: IOException) {
+            lastError = e.message ?: "Falha ao enviar conexão"
+            false
+        }
+    }
+
+    /**
+     * Aguarda resposta de conexão (connect_ack)
+     */
+    suspend fun receiveConnectAck(): ConnectAckPacket? = withContext(Dispatchers.IO) {
+        val currentSocket = socket
+
+        if (currentSocket == null) {
+            return@withContext null
+        }
+
+        return@withContext try {
+            val buffer = ByteArray(1024)
+            val packet = DatagramPacket(buffer, buffer.size)
+            currentSocket.receive(packet)
+            
+            val receivedData = packet.data.copyOfRange(0, packet.length)
+            serializer.deserializeConnectAck(receivedData)
+        } catch (e: SocketTimeoutException) {
+            lastError = "Timeout aguardando resposta"
+            null
+        } catch (e: IOException) {
+            lastError = e.message ?: "Erro ao receber resposta"
+            null
+        }
+    }
 
     private fun disconnectInternal() {
         socket?.close()
@@ -129,11 +149,9 @@ class UdpClient(
     }
 }
 
-/**
- * Estados possíveis da comunicação UDP.
- */
 enum class ConnectionState {
     DISCONNECTED,
+    CONNECTING,
     CONNECTED,
-    ERROR
+    CONNECTION_LOST
 }

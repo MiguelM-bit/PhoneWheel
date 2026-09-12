@@ -14,6 +14,7 @@ namespace PhoneWheel.Server.Network;
 /// - desserializar e validar JSON;
 /// - identificar o IP do dispositivo remetente;
 /// - disponibilizar os pacotes validados para processamento;
+/// - responder ao handshake CONNECT com CONNECT_ACK;
 /// - tratar pacotes inválidos sem encerrar o servidor;
 /// - permitir iniciar e parar o servidor de forma assíncrona.
 ///
@@ -31,7 +32,12 @@ public class UdpServer : IDisposable
     private bool _disposed;
 
     /// <summary>
-    /// Evento disparado quando um pacote válido é recebido.
+    /// Evento disparado quando um pacote de conexão (CONNECT) é recebido.
+    /// </summary>
+    public event EventHandler<ConnectPacketReceivedEventArgs>? ConnectPacketReceived;
+
+    /// <summary>
+    /// Evento disparado quando um pacote válido de steering é recebido.
     /// </summary>
     public event EventHandler<SteeringDataReceivedEventArgs>? SteeringDataReceived;
 
@@ -97,6 +103,28 @@ public class UdpServer : IDisposable
         _udpClient = null;
         _cancellationTokenSource?.Dispose();
         _cancellationTokenSource = null;
+    }
+
+    /// <summary>
+    /// Envia um pacote de resposta (CONNECT_ACK) para um cliente.
+    /// </summary>
+    public async Task SendConnectAckAsync(IPEndPoint remoteEndPoint, ConnectAckPacket packet)
+    {
+        if (_udpClient == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var json = PacketParser.SerializeConnectAck(packet);
+            var data = Encoding.UTF8.GetBytes(json);
+            await _udpClient.SendAsync(data, data.Length, remoteEndPoint).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Erro ao enviar CONNECT_ACK] {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -166,21 +194,33 @@ public class UdpServer : IDisposable
             return;
         }
 
-        if (!PacketParser.TryParse(jsonData, out var packet) || packet == null)
+        // Tentar desserializar como pacote de conexão primeiro
+        if (PacketParser.TryParseConnect(jsonData, out var connectPacket) && connectPacket != null)
         {
-            InvalidPacketReceived?.Invoke(this, new InvalidPacketEventArgs
+            ConnectPacketReceived?.Invoke(this, new ConnectPacketReceivedEventArgs
             {
                 RemoteEndPoint = remoteEndPoint,
-                Reason = "Pacote JSON inválido ou malformado"
+                Packet = connectPacket
             });
             return;
         }
 
-        // Pacote válido
-        SteeringDataReceived?.Invoke(this, new SteeringDataReceivedEventArgs
+        // Tentar desserializar como pacote de steering
+        if (PacketParser.TryParse(jsonData, out var packet) && packet != null)
+        {
+            SteeringDataReceived?.Invoke(this, new SteeringDataReceivedEventArgs
+            {
+                RemoteEndPoint = remoteEndPoint,
+                Packet = packet
+            });
+            return;
+        }
+
+        // Nenhum tipo de pacote válido
+        InvalidPacketReceived?.Invoke(this, new InvalidPacketEventArgs
         {
             RemoteEndPoint = remoteEndPoint,
-            Packet = packet
+            Reason = "Pacote JSON inválido ou malformado"
         });
     }
 
@@ -194,6 +234,16 @@ public class UdpServer : IDisposable
         StopAsync().Wait();
         _disposed = true;
     }
+}
+
+/// <summary>
+/// Argumentos de evento para pacotes de conexão recebidos.
+/// </summary>
+public class ConnectPacketReceivedEventArgs : EventArgs
+{
+    public required IPEndPoint RemoteEndPoint { get; init; }
+
+    public required ConnectPacket Packet { get; init; }
 }
 
 /// <summary>

@@ -5,9 +5,9 @@ import androidx.lifecycle.lifecycleScope
 import android.os.Bundle
 import android.widget.Toast
 import com.phonewheel.databinding.ActivityMainBinding
+import com.phonewheel.connection.ConnectionManager
 import com.phonewheel.model.SteeringPacket
 import com.phonewheel.network.ConnectionState
-import com.phonewheel.network.UdpClient
 import com.phonewheel.sensor.GyroscopeManager
 import com.phonewheel.sensor.GyroAxis
 import com.phonewheel.sensor.SensorNotAvailableException
@@ -20,14 +20,13 @@ import kotlinx.coroutines.launch
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        // Intervalo de envio de pacotes de direção (aprox. 20 pacotes/segundo)
         private const val SEND_INTERVAL_MS = 50L
     }
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var gyroscopeManager: GyroscopeManager
     private lateinit var steeringProcessor: SteeringProcessor
-    private lateinit var udpClient: UdpClient
+    private lateinit var connectionManager: ConnectionManager
 
     private var sendingJob: Job? = null
 
@@ -107,13 +106,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupNetwork() {
-        udpClient = UdpClient()
+        connectionManager = ConnectionManager()
 
         binding.buttonConnect.setOnClickListener { onConnectClicked() }
         binding.buttonDisconnect.setOnClickListener { onDisconnectClicked() }
 
         lifecycleScope.launch {
-            udpClient.connectionState.collect { state ->
+            connectionManager.connectionState.collect { state ->
                 updateConnectionUi(state)
             }
         }
@@ -128,39 +127,45 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        binding.buttonConnect.isEnabled = false
+        binding.editTextIp.isEnabled = false
+        binding.editTextPort.isEnabled = false
+
         lifecycleScope.launch {
-            val connected = udpClient.connect(ip, port)
+            val connected = connectionManager.connect(ip, port)
             if (connected) {
+                Toast.makeText(this@MainActivity, "Conectado com sucesso!", Toast.LENGTH_SHORT).show()
                 startSendingSteeringUpdates()
             } else {
                 Toast.makeText(
                     this@MainActivity,
-                    "Falha ao conectar: ${udpClient.lastError}",
+                    "Falha ao conectar: ${connectionManager.lastError}",
                     Toast.LENGTH_LONG
                 ).show()
+                binding.buttonConnect.isEnabled = true
+                binding.editTextIp.isEnabled = true
+                binding.editTextPort.isEnabled = true
             }
         }
     }
 
     private fun onDisconnectClicked() {
         stopSendingSteeringUpdates()
-        udpClient.disconnect()
+        connectionManager.disconnect()
+        binding.buttonConnect.isEnabled = true
+        binding.editTextIp.isEnabled = true
+        binding.editTextPort.isEnabled = true
     }
 
-    /**
-     * Inicia o envio periódico do estado atual do volante enquanto conectado.
-     * O UdpClient apenas envia o pacote fornecido; toda leitura do sensor e
-     * cálculo do ângulo permanece de responsabilidade do SteeringProcessor.
-     */
     private fun startSendingSteeringUpdates() {
         stopSendingSteeringUpdates()
         sendingJob = lifecycleScope.launch {
-            while (isActive && udpClient.isConnected()) {
+            while (isActive && connectionManager.isConnected()) {
                 val packet = SteeringPacket(
                     angle = steeringProcessor.getCurrentAngle(),
                     gyro = steeringProcessor.getLastRawAngularVelocity()
                 )
-                udpClient.send(packet)
+                connectionManager.sendSteeringPacket(packet)
                 delay(SEND_INTERVAL_MS)
             }
         }
@@ -180,6 +185,13 @@ class MainActivity : AppCompatActivity() {
                 binding.editTextIp.isEnabled = false
                 binding.editTextPort.isEnabled = false
             }
+            ConnectionState.CONNECTING -> {
+                binding.textViewConnectionStatus.text = "Status: Conectando..."
+                binding.buttonConnect.isEnabled = false
+                binding.buttonDisconnect.isEnabled = false
+                binding.editTextIp.isEnabled = false
+                binding.editTextPort.isEnabled = false
+            }
             ConnectionState.DISCONNECTED -> {
                 binding.textViewConnectionStatus.text = "Status: Desconectado"
                 binding.buttonConnect.isEnabled = true
@@ -187,8 +199,8 @@ class MainActivity : AppCompatActivity() {
                 binding.editTextIp.isEnabled = true
                 binding.editTextPort.isEnabled = true
             }
-            ConnectionState.ERROR -> {
-                binding.textViewConnectionStatus.text = "Status: Erro (${udpClient.lastError})"
+            ConnectionState.CONNECTION_LOST -> {
+                binding.textViewConnectionStatus.text = "Status: Conexão Perdida"
                 binding.buttonConnect.isEnabled = true
                 binding.buttonDisconnect.isEnabled = false
                 binding.editTextIp.isEnabled = true
@@ -226,7 +238,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopSendingSteeringUpdates()
-        udpClient.disconnect()
+        connectionManager.disconnect()
         gyroscopeManager.cleanup()
     }
 }

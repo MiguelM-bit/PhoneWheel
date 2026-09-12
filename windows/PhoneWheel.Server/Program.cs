@@ -2,7 +2,8 @@ using System.Collections.Concurrent;
 using PhoneWheel.Server.Network;
 using PhoneWheel.Server.Input;
 using PhoneWheel.Server.VirtualController;
-using PhoneWheel.Server.Core;
+using PhoneWheel.Server.Connection;
+using PhoneWheel.Server.Services;
 
 const int UDP_PORT = 5005;
 const long WATCHDOG_TIMEOUT_MS = 500; // Timeout de conexão: 500 ms

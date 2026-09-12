@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using PhoneWheel.Server.VirtualController;
 
-namespace PhoneWheel.Server.Core;
+namespace PhoneWheel.Server.Connection;
 
 /// <summary>
 /// Monitora a recepção de pacotes UDP e detecta desconexões.

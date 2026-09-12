@@ -1,4 +1,4 @@
-package com.phonewheel
+package com.phonewheel.ui
 
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope

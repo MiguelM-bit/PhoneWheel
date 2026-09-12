@@ -1,4 +1,4 @@
-namespace PhoneWheel.Server.Core;
+namespace PhoneWheel.Server.Services;
 
 /// <summary>
 /// Logger centralizado para a aplicação.

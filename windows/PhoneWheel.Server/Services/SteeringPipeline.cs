@@ -2,7 +2,7 @@ using PhoneWheel.Server.Input;
 using PhoneWheel.Server.Models;
 using PhoneWheel.Server.VirtualController;
 
-namespace PhoneWheel.Server.Core;
+namespace PhoneWheel.Server.Services;
 
 /// <summary>
 /// Pipeline de processamento de direção: composição de todos os componentes

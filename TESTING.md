@@ -73,6 +73,45 @@ dotnet run --project PhoneWheel.Server/PhoneWheel.Server.csproj
 
 ---
 
+## 🖥️ Interface Visual (WPF)
+
+Aplicativo Windows com volante giratório, status de conexão e controle iniciar/parar. Substitui o console como forma principal de operar o servidor.
+
+### Como usar
+
+```powershell
+cd windows
+dotnet run --project PhoneWheel.Server.UI/PhoneWheel.Server.UI.csproj
+```
+
+1. Pressionar **Iniciar** — o servidor passa a escutar em `0.0.0.0:5005` (status: *Aguardando conexão*).
+2. No Android, pressionar **"Buscar servidor"** e selecionar o servidor, ou digitar o IP manualmente, e **"Conectar"**.
+3. Ao conectar, o status muda para *Conectado* e o **volante gira** conforme o celular é inclinado.
+4. O painel mostra ângulo recebido, calibrado, normalizado, giroscópio e contagem de pacotes.
+5. Pressionar **Parar** encerra o servidor (status: *Parado*).
+
+### Como testar (sem Android)
+
+Com a UI aberta e **Iniciar** pressionado, envie pacotes de outro terminal:
+
+```powershell
+# Handshake + steering (simula o celular)
+$socket = New-Object System.Net.Sockets.UdpClient
+$connect = @{ type="connect"; device="PhoneWheel"; version="2.0"; timestamp=[DateTimeOffset]::Now.ToUnixTimeMilliseconds() } | ConvertTo-Json
+$bytes = [Text.Encoding]::UTF8.GetBytes($connect)
+$socket.Send($bytes, $bytes.Length, "127.0.0.1", 5005)
+Start-Sleep -Milliseconds 200
+$steer = @{ type="steering"; device="PhoneWheel"; version="2.0"; angle=67.5; timestamp=[DateTimeOffset]::Now.ToUnixTimeMilliseconds() } | ConvertTo-Json
+$bytes = [Text.Encoding]::UTF8.GetBytes($steer)
+$socket.Send($bytes, $bytes.Length, "127.0.0.1", 5005)
+```
+
+**Esperado na UI:** status *Conectado*, ângulo recebido `67,5°`, volante girado, log com os pacotes processados.
+
+> **Nota:** o console (`PhoneWheel.Server`) continua disponível como alternativa e compartilha o mesmo motor (`ServerEngine`).
+
+---
+
 ## 🤝 Handshake (connect/connect_ack)
 
 O Android envia `connect` e só envia `steering` após receber `connect_ack`. O servidor rejeita `steering` de clientes não autenticados.

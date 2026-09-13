@@ -46,16 +46,20 @@ PhoneWheel/
 │       ├── model/       # SteeringPacket, ConnectionPackets (connect/discover)
 │       └── settings/    # SettingsManager
 ├── windows/                          # Servidor Windows (C#/.NET)
-│   └── PhoneWheel.Server/
-│       ├── Program.cs                # Composição e orquestração
-│       ├── Network/      # UdpServer, PacketParser
-│       ├── Connection/   # ConnectionWatchdog, HandshakeManager, HeartbeatManager
-│       ├── Input/        # SteeringProcessor, CalibrationManager
-│       ├── VirtualController/  # IVirtualController, VJoyController (simulação)
-│       ├── Profiles/     # SteeringProfile, ProfileManager
-│       ├── Services/     # ServerLogger, SteeringPipeline
-│       ├── UI/           # UIStatusManager
-│       └── Models/       # SteeringPacket, ConnectPacket, DiscoverPacket, ...
+│   ├── PhoneWheel.Server/            # Núcleo do servidor (biblioteca + host console)
+│   │   ├── Program.cs                # Host console (thin) usando ServerEngine
+│   │   ├── Services/     # ServerEngine, ServerLogger, SteeringPipeline
+│   │   ├── Network/      # UdpServer, PacketParser, ServerDiscovery
+│   │   ├── Connection/   # ConnectionWatchdog, HandshakeManager, HeartbeatManager
+│   │   ├── Input/        # SteeringProcessor, CalibrationManager
+│   │   ├── VirtualController/  # IVirtualController, VJoyController (simulação)
+│   │   ├── Profiles/     # SteeringProfile, ProfileManager
+│   │   ├── UI/           # UIStatusManager
+│   │   └── Models/       # SteeringPacket, ConnectPacket, DiscoverPacket, ...
+│   └── PhoneWheel.Server.UI/         # Interface visual WPF (volante + status)
+│       ├── MainWindow.xaml           # Volante giratório, painel de valores, log
+│       ├── ViewModels/   # MainViewModel, RelayCommand
+│       └── App.xaml                  # Bootstrap da aplicação
 ├── protocol/
 │   └── protocol.md                   # Especificação do protocolo UDP (fonte da verdade)
 ├── test-discovery.ps1                # Teste de descoberta de servidor
@@ -89,20 +93,37 @@ Requisitos: JDK 11+, Android SDK (API 34), Gradle wrapper incluso.
 
 ## 🚀 Executar
 
-1. **Iniciar o servidor Windows**:
-   ```bash
-   cd windows
-   dotnet run --project PhoneWheel.Server/PhoneWheel.Server.csproj
-   ```
-   O servidor escuta em `0.0.0.0:5005` e aguarda pacotes.
+### Interface visual (recomendado)
 
-2. **Conectar o Android** (mesma rede Wi-Fi):
-   - Instalar o APK e abrir o app.
-   - Pressionar **"Buscar servidor"** para descobrir o servidor automaticamente (broadcast UDP) e selecionar o IP na lista.
-   - Ou digitar o IP/porta manualmente (fallback).
-   - Pressionar **"Conectar"** — o app faz o handshake e começa a enviar dados do giroscópio.
+```bash
+cd windows
+dotnet run --project PhoneWheel.Server.UI/PhoneWheel.Server.UI.csproj
+```
 
-3. **Verificar no console do servidor**: cada pacote `steering` é exibido com ângulo, valor normalizado e status do controlador virtual.
+Abre a janela WPF com:
+- **Status de conexão** (Parado / Aguardando conexão / Conectado / Desconectado)
+- Botão **Iniciar/Parar** o servidor
+- **Volante giratório** que acompanha o ângulo de inclinação do celular
+- Painel com ângulo recebido, calibrado, normalizado, giroscópio e contagem de pacotes
+- Log em tempo real dos eventos do servidor
+
+### Console (alternativa)
+
+```bash
+cd windows
+dotnet run --project PhoneWheel.Server/PhoneWheel.Server.csproj
+```
+
+O servidor escuta em `0.0.0.0:5005` e aguarda pacotes.
+
+### Conectar o Android (mesma rede Wi-Fi)
+
+- Instalar o APK e abrir o app.
+- Pressionar **"Buscar servidor"** para descobrir o servidor automaticamente (broadcast UDP) e selecionar o IP na lista.
+- Ou digitar o IP/porta manualmente (fallback).
+- Pressionar **"Conectar"** — o app faz o handshake e começa a enviar dados do giroscópio.
+
+Na interface visual, o volante gira conforme o celular é inclinado; no console, cada pacote `steering` é exibido com ângulo, valor normalizado e status do controlador virtual.
 
 ## 📡 Protocolo
 
@@ -121,6 +142,7 @@ Instruções de uso e teste — incluindo a **descoberta de servidor** — estã
 | Pipeline de processamento (calibração, deadzone, normalização, suavização) | ✅ Implementado e testado |
 | Watchdog de conexão (500ms) | ✅ Implementado e testado |
 | Descoberta de servidor (discover/discover_ack) | ✅ Implementado e testado |
+| Interface visual WPF (volante, status, iniciar/parar) | ✅ Implementado e testado |
 | Controle virtual vJoy | ⚠️ Simulação (Fase 1) — integração real pendente |
 | Testes unitários | ❌ Não existem |
 
@@ -130,6 +152,7 @@ Instruções de uso e teste — incluindo a **descoberta de servidor** — estã
 - [x] Aplicativo Android: giroscópio, steering, UDP, handshake
 - [x] Servidor Windows: listener UDP, pipeline, watchdog
 - [x] Descoberta de servidor via broadcast
+- [x] Interface visual WPF (volante, status, iniciar/parar)
 - [ ] Integração real com driver vJoy (Fase 2)
 - [ ] Testes unitários (Android e Windows)
 - [ ] Configuração via arquivo (calibração, deadzone, porta)

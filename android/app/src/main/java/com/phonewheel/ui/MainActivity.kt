@@ -1,6 +1,7 @@
 package com.phonewheel.ui
 
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import android.os.Bundle
 import android.widget.Toast
@@ -8,6 +9,7 @@ import com.phonewheel.databinding.ActivityMainBinding
 import com.phonewheel.connection.ConnectionManager
 import com.phonewheel.model.SteeringPacket
 import com.phonewheel.network.ConnectionState
+import com.phonewheel.network.ServerDiscovery
 import com.phonewheel.sensor.GyroscopeManager
 import com.phonewheel.sensor.GyroAxis
 import com.phonewheel.sensor.SensorNotAvailableException
@@ -27,6 +29,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var gyroscopeManager: GyroscopeManager
     private lateinit var steeringProcessor: SteeringProcessor
     private lateinit var connectionManager: ConnectionManager
+    private lateinit var serverDiscovery: ServerDiscovery
 
     private var sendingJob: Job? = null
 
@@ -107,13 +110,45 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupNetwork() {
         connectionManager = ConnectionManager()
+        serverDiscovery = ServerDiscovery()
 
         binding.buttonConnect.setOnClickListener { onConnectClicked() }
         binding.buttonDisconnect.setOnClickListener { onDisconnectClicked() }
+        binding.buttonDiscover.setOnClickListener { onDiscoverClicked() }
 
         lifecycleScope.launch {
             connectionManager.connectionState.collect { state ->
                 updateConnectionUi(state)
+            }
+        }
+    }
+
+    private fun onDiscoverClicked() {
+        binding.buttonDiscover.isEnabled = false
+
+        lifecycleScope.launch {
+            try {
+                val servers = serverDiscovery.discover()
+
+                if (servers.isEmpty()) {
+                    Toast.makeText(this@MainActivity, "Nenhum servidor encontrado", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+
+                val serverNames = servers.map { "${it.ip}:${it.port}" }.toTypedArray()
+
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Servidores encontrados")
+                    .setItems(serverNames) { _, which ->
+                        val server = servers[which]
+                        binding.editTextIp.setText(server.ip)
+                        binding.editTextPort.setText(server.port.toString())
+                                            onConnectClicked()
+                                        }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            } finally {
+                binding.buttonDiscover.isEnabled = true
             }
         }
     }

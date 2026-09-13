@@ -160,7 +160,87 @@ public static class PacketParser
         return JsonSerializer.Serialize(dto, JsonOptions);
     }
 
-    private static bool IsValidAngle(double angle)
+        /// <summary>
+        /// Tenta desserializar um pacote de descoberta (DISCOVER).
+        /// </summary>
+        public static bool TryParseDiscover(string jsonData, out DiscoverPacket? packet)
+        {
+            packet = null;
+
+            if (string.IsNullOrWhiteSpace(jsonData))
+            {
+                return false;
+            }
+
+            try
+            {
+                var deserialized = JsonSerializer.Deserialize<DiscoverPacketDto>(jsonData, JsonOptions);
+
+                if (deserialized == null)
+                {
+                    return false;
+                }
+
+                // Validar campos obrigatórios
+                if (string.IsNullOrWhiteSpace(deserialized.Type) || deserialized.Type != DiscoverPacket.TypeDiscover)
+                {
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(deserialized.Device) || deserialized.Device != "PhoneWheel")
+                {
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(deserialized.Version))
+                {
+                    return false;
+                }
+
+                if (deserialized.Timestamp < 0)
+                {
+                    return false;
+                }
+
+                packet = new DiscoverPacket
+                {
+                    Type = deserialized.Type,
+                    Device = deserialized.Device,
+                    Version = deserialized.Version,
+                    Timestamp = deserialized.Timestamp
+                };
+
+                return true;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Serializa um pacote de descoberta (DISCOVER_ACK) para JSON.
+        /// </summary>
+        public static string SerializeDiscoverAck(DiscoverAckPacket packet)
+        {
+            var dto = new DiscoverAckPacketDto
+            {
+                Type = packet.Type,
+                Device = packet.Device,
+                Version = packet.Version,
+                ServerIp = packet.ServerIp,
+                ServerPort = packet.ServerPort,
+                Timestamp = packet.Timestamp
+            };
+
+            return JsonSerializer.Serialize(dto, JsonOptions);
+        }
+
+        private static bool IsValidAngle(double angle)
     {
         return !double.IsNaN(angle) && !double.IsInfinity(angle);
     }
@@ -214,4 +294,40 @@ public static class PacketParser
         [JsonPropertyName("timestamp")]
         public long Timestamp { get; set; }
     }
-}
+
+        private class DiscoverPacketDto
+        {
+            [JsonPropertyName("type")]
+            public string Type { get; set; } = "";
+
+            [JsonPropertyName("device")]
+            public string Device { get; set; } = "";
+
+            [JsonPropertyName("version")]
+            public string Version { get; set; } = "";
+
+            [JsonPropertyName("timestamp")]
+            public long Timestamp { get; set; }
+        }
+
+        private class DiscoverAckPacketDto
+        {
+            [JsonPropertyName("type")]
+            public string Type { get; set; } = "";
+
+            [JsonPropertyName("device")]
+            public string Device { get; set; } = "";
+
+            [JsonPropertyName("version")]
+            public string Version { get; set; } = "";
+
+            [JsonPropertyName("server_ip")]
+            public string ServerIp { get; set; } = "";
+
+            [JsonPropertyName("server_port")]
+            public int ServerPort { get; set; }
+
+            [JsonPropertyName("timestamp")]
+            public long Timestamp { get; set; }
+        }
+    }

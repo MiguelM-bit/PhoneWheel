@@ -1,4 +1,7 @@
 using System.Collections.Concurrent;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using PhoneWheel.Server.Network;
 using PhoneWheel.Server.Input;
 using PhoneWheel.Server.VirtualController;
@@ -101,6 +104,36 @@ server.ConnectPacketReceived += (sender, args) =>
     catch (Exception ex)
     {
         ServerLogger.Error("Erro ao processar CONNECT: {0}", ex.Message);
+    }
+};
+
+// Responder a pedidos de descoberta (DISCOVER)
+server.DiscoverPacketReceived += (sender, args) =>
+{
+    try
+    {
+        var clientIp = args.RemoteEndPoint.Address.ToString();
+
+        ServerLogger.Success("DISCOVER recebido de {0}:{1}", clientIp, args.RemoteEndPoint.Port);
+
+        // Determinar o IP local do servidor na mesma subnet do cliente
+        var localIp = ServerDiscovery.GetLocalIPv4(args.RemoteEndPoint.Address);
+
+        // Enviar resposta (DISCOVER_ACK) de forma assíncrona
+        _ = server.SendDiscoverAckAsync(args.RemoteEndPoint, new DiscoverAckPacket
+        {
+            Device = "PhoneWheel",
+            Version = "2.0",
+            ServerIp = localIp,
+            ServerPort = UDP_PORT,
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        });
+
+        ServerLogger.Info("DISCOVER_ACK enviado para {0}:{1}", clientIp, args.RemoteEndPoint.Port);
+    }
+    catch (Exception ex)
+    {
+        ServerLogger.Error("Erro ao processar DISCOVER: {0}", ex.Message);
     }
 };
 
@@ -214,4 +247,91 @@ finally
     await server.StopAsync();
     server.Dispose();
     ServerLogger.Info("Servidor encerrado.");
+}
+
+/// <summary>
+/// Utilitários para a descoberta de servidor na rede local.
+/// </summary>
+static class ServerDiscovery
+{
+    /// <summary>
+    /// Obtém o endereço IPv4 local do servidor, preferindo uma interface
+    /// na mesma subnet do cliente. Retorna "127.0.0.1" como último recurso.
+    /// </summary>
+    /// <param name="clientAddress">Endereço IP do cliente que enviou o DISCOVER.</param>
+    public static string GetLocalIPv4(IPAddress clientAddress)
+    {
+        var candidates = new List<(IPAddress Address, IPAddress Mask)>();
+
+        foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (networkInterface.OperationalStatus != OperationalStatus.Up)
+            {
+                continue;
+            }
+
+            if (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+            {
+                continue;
+            }
+
+            foreach (var unicastAddress in networkInterface.GetIPProperties().UnicastAddresses)
+            {
+                if (unicastAddress.Address.AddressFamily != AddressFamily.InterNetwork)
+                {
+                    continue;
+                }
+
+                if (IPAddress.IsLoopback(unicastAddress.Address))
+                {
+                    continue;
+                }
+
+                candidates.Add((unicastAddress.Address, unicastAddress.IPv4Mask));
+            }
+        }
+
+        // Preferir interface na mesma subnet do cliente
+        foreach (var candidate in candidates)
+        {
+            if (IsSameSubnet(clientAddress, candidate.Address, candidate.Mask))
+            {
+                return candidate.Address.ToString();
+            }
+        }
+
+        // Fallback: primeira interface IPv4 não-loopback
+        if (candidates.Count > 0)
+        {
+            return candidates[0].Address.ToString();
+        }
+
+        // Último recurso
+        return "127.0.0.1";
+    }
+
+    /// <summary>
+    /// Verifica se dois endereços IPv4 estão na mesma subnet usando a máscara.
+    /// </summary>
+    private static bool IsSameSubnet(IPAddress clientAddress, IPAddress serverAddress, IPAddress mask)
+    {
+        if (clientAddress.AddressFamily != AddressFamily.InterNetwork)
+        {
+            return false;
+        }
+
+        var clientBytes = clientAddress.GetAddressBytes();
+        var serverBytes = serverAddress.GetAddressBytes();
+        var maskBytes = mask.GetAddressBytes();
+
+        for (int i = 0; i < clientBytes.Length; i++)
+        {
+            if ((clientBytes[i] & maskBytes[i]) != (serverBytes[i] & maskBytes[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

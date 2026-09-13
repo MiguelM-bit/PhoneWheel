@@ -124,12 +124,88 @@ Enviado pelo Windows em resposta a um `connect`. Confirma que o servidor está a
 
 ---
 
+## 📦 Pacote: `discover` (Descoberta de Servidor)
+
+Enviado pelo Android via **broadcast UDP** (`255.255.255.255:5005`) quando o usuário pressiona "Buscar servidor". Permite encontrar o servidor Windows na rede local sem digitar o IP manualmente.
+
+### Formato
+
+```json
+{
+  "type": "discover",
+  "device": "PhoneWheel",
+  "version": "2.0",
+  "timestamp": 123456789
+}
+```
+
+### Descrição dos Campos
+
+| Campo       | Tipo   | Descrição                                                    |
+|-------------|--------|--------------------------------------------------------------|
+| `type`      | string | Sempre `"discover"` para pacotes de descoberta               |
+| `device`    | string | Identificador do dispositivo (`"PhoneWheel"`)                |
+| `version`   | string | Versão do protocolo (ex: `"2.0"`)                            |
+| `timestamp` | long   | Timestamp local do Android em milissegundos                  |
+
+### Comportamento Esperado
+
+1. **Android** envia `discover` via broadcast para `255.255.255.255:5005` (repetido algumas vezes durante a janela de descoberta)
+2. **Windows** recebe o broadcast (já escuta em `0.0.0.0:5005`) e responde com `discover_ack` para o IP/porta de origem do cliente
+3. **Android** coleta respostas por uma janela configurável (ex: 2 segundos), deduplicando por IP
+4. Se nenhum servidor responder, o Android informa "Nenhum servidor encontrado"
+
+> **Nota**: O broadcast não atravessa subnets. Ambos os dispositivos devem estar na mesma rede local (mesmo subnet).
+
+---
+
+## 📦 Pacote: `discover_ack` (Resposta de Descoberta)
+
+Enviado pelo Windows em resposta a um `discover`. Informa ao Android o IP e a porta do servidor.
+
+### Formato
+
+```json
+{
+  "type": "discover_ack",
+  "device": "PhoneWheel",
+  "version": "2.0",
+  "server_ip": "192.168.1.100",
+  "server_port": 5005,
+  "timestamp": 123456789
+}
+```
+
+### Descrição dos Campos
+
+| Campo         | Tipo   | Descrição                                          |
+|---------------|--------|--------------------------------------------------|
+| `type`        | string | Sempre `"discover_ack"`                          |
+| `device`      | string | Eco do identificador do dispositivo               |
+| `version`     | string | Versão do protocolo suportada pelo Windows        |
+| `server_ip`   | string | Endereço IPv4 do servidor na rede local           |
+| `server_port` | int    | Porta UDP em que o servidor escuta (padrão: 5005) |
+| `timestamp`   | long   | Timestamp do servidor Windows em milissegundos    |
+
+### Observações
+
+- **Windows** determina seu IP local enumerando as interfaces de rede (preferindo IPv4 não-loopback no mesmo subnet do cliente)
+- O Android também conhece o IP do servidor pela origem do pacote; `server_ip` é informativo para exibição/verificação
+- Apenas uma resposta por `discover` é necessária; respostas duplicadas são ignoradas
+
+---
+
 ## 🔄 Fluxo de Comunicação Completo
 
 ```
 ┌─────────────────┐                          ┌──────────────────┐
 │   Android App   │                          │  Windows Server  │
 └────────┬────────┘                          └────────┬─────────┘
+         │                                            │
+         │ Usuário pressiona "Buscar servidor"        │
+         │                                            │
+         │────── DISCOVER (broadcast 255.255.255.255) →│
+         │ ← ─────────────── DISCOVER_ACK ────────────│
          │                                            │
          │ Usuário pressiona "Conectar"               │
          │                                            │

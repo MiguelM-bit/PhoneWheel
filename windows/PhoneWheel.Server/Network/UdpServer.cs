@@ -37,9 +37,14 @@ public class UdpServer : IDisposable
     public event EventHandler<ConnectPacketReceivedEventArgs>? ConnectPacketReceived;
 
     /// <summary>
-    /// Evento disparado quando um pacote válido de steering é recebido.
+        /// Evento disparado quando um pacote de descoberta (DISCOVER) é recebido.
     /// </summary>
-    public event EventHandler<SteeringDataReceivedEventArgs>? SteeringDataReceived;
+        public event EventHandler<DiscoverPacketReceivedEventArgs>? DiscoverPacketReceived;
+
+        /// <summary>
+        /// Evento disparado quando um pacote válido de steering é recebido.
+        /// </summary>
+        public event EventHandler<SteeringDataReceivedEventArgs>? SteeringDataReceived;
 
     /// <summary>
     /// Evento disparado quando um pacote inválido é recebido.
@@ -127,6 +132,28 @@ public class UdpServer : IDisposable
         }
     }
 
+        /// <summary>
+        /// Envia um pacote de resposta de descoberta (DISCOVER_ACK) para um cliente.
+        /// </summary>
+        public async Task SendDiscoverAckAsync(IPEndPoint remoteEndPoint, DiscoverAckPacket packet)
+        {
+            if (_udpClient == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var json = PacketParser.SerializeDiscoverAck(packet);
+                var data = Encoding.UTF8.GetBytes(json);
+                await _udpClient.SendAsync(data, data.Length, remoteEndPoint).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Erro ao enviar DISCOVER_ACK] {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
     /// <summary>
     /// Loop de escuta contínuo de pacotes UDP.
     /// </summary>
@@ -194,8 +221,19 @@ public class UdpServer : IDisposable
             return;
         }
 
-        // Tentar desserializar como pacote de conexão primeiro
-        if (PacketParser.TryParseConnect(jsonData, out var connectPacket) && connectPacket != null)
+        // Tentar desserializar como pacote de descoberta primeiro
+                if (PacketParser.TryParseDiscover(jsonData, out var discoverPacket) && discoverPacket != null)
+                {
+                    DiscoverPacketReceived?.Invoke(this, new DiscoverPacketReceivedEventArgs
+                    {
+                        RemoteEndPoint = remoteEndPoint,
+                        Packet = discoverPacket
+                    });
+                    return;
+                }
+
+                // Tentar desserializar como pacote de conexão
+                if (PacketParser.TryParseConnect(jsonData, out var connectPacket) && connectPacket != null)
         {
             ConnectPacketReceived?.Invoke(this, new ConnectPacketReceivedEventArgs
             {
@@ -244,6 +282,16 @@ public class ConnectPacketReceivedEventArgs : EventArgs
     public required IPEndPoint RemoteEndPoint { get; init; }
 
     public required ConnectPacket Packet { get; init; }
+}
+
+/// <summary>
+/// Argumentos de evento para pacotes de descoberta recebidos.
+/// </summary>
+public class DiscoverPacketReceivedEventArgs : EventArgs
+{
+    public required IPEndPoint RemoteEndPoint { get; init; }
+
+    public required DiscoverPacket Packet { get; init; }
 }
 
 /// <summary>

@@ -269,16 +269,20 @@ O servidor Windows processa eventos de botão (`type: "button"`) e os encaminha 
 | Y | 3 | Botão 3 | Y |
 | LB | 4 | Botão 4 | LB |
 | RB | 5 | Botão 5 | RB |
-| LT | 6 | Botão 6 | LS |
-| RT | 7 | Botão 7 | RS |
+| LS | 6 | Botão 6 | LS |
+| RS | 7 | Botão 7 | RS |
 | Back | 8 | Botão 8 | Back |
 | Start | 9 | Botão 9 | Start |
+| DPad Up | 10 | Botão 10 | DPad Up |
+| DPad Down | 11 | Botão 11 | DPad Down |
+| DPad Left | 12 | Botão 12 | DPad Left |
+| DPad Right | 13 | Botão 13 | DPad Right |
 
 > **Nota**: pressionar um botão já pressionado (ou liberar um já liberado) não gera pacote duplicado. Ao desconectar, todos os botões são liberados automaticamente — no Android via `releaseAll` e no servidor via watchdog (libera todos os botões pressionados no controle virtual).
 
 ### Como testar (script PowerShell)
 
-O script `test-button.ps1` simula o Android: faz o handshake (`connect` → `connect_ack`) e envia uma sequência de press/release para os botões 0..3.
+O script `test-button.ps1` simula o Android: faz o handshake (`connect` → `connect_ack`) e envia uma sequência de press/release para os botões 0..13.
 
 ```powershell
 # 1. Iniciar o servidor em um terminal
@@ -312,7 +316,67 @@ dotnet run --project PhoneWheel.Server/PhoneWheel.Server.csproj
 
 O mapeamento completo (ID → vJoy → Xbox 360) está na tabela da seção **"Como testar (no app Android)"** acima.
 
-> **Nota**: botões fora do intervalo suportado (ex: >9 no Xbox 360) são rejeitados com log de erro, sem derrubar o servidor. O pacote `button` também mantém a conexão ativa no watchdog.
+> **Nota**: botões fora do intervalo suportado (ex: >13 no Xbox 360) são rejeitados com log de erro, sem derrubar o servidor. O pacote `button` também mantém a conexão ativa no watchdog.
+
+---
+
+## 🕹️ Eixos Analógicos (pacote `axis`)
+
+O servidor Windows processa eventos de eixo analógico (`type: "axis"`) e os encaminha ao controle virtual. O app Android agora possui os **componentes de controle virtual** (`VirtualAnalogStick`, `VirtualButton`, `VirtualDPad`) prontos para envio desses eventos pela conexão UDP existente — a Controller Screen que os utiliza ainda não foi construída.
+
+### Componentes de controle virtual (Android)
+
+Os componentes reutilizáveis em `com.phonewheel.ui.controls`:
+
+| Componente | Responsabilidade | Envio |
+|------------|------------------|-------|
+| `VirtualButton` | Botão com feedback visual (pressionado/solto), primeiro ponteiro vence | `ButtonPacket` (via `ButtonSender`) |
+| `VirtualDPad` | D-pad com 4 direções, multi-toque, deslize entre direções | `ButtonPacket` (ids 10–13) |
+| `VirtualAnalogStick` | Analógico circular com knob, valores normalizados [-1, +1], retorno ao centro | `AxisPacket` (via `AxisSender`) |
+
+**Características:**
+- **Multi-toque**: botão + analógico + D-pad podem ser usados simultaneamente sem interferência;
+- **Envio apenas em mudança**: botões deduplicam press/release; eixos usam threshold de 0.01;
+- **Independentes da tela**: configuráveis (`buttonId`, `label`, `sender`, `stickId`, `axisSender`), prontos para a Controller Screen;
+- **Sem nova conexão UDP**: reutilizam o `UdpClient` existente.
+
+**Testes unitários (JVM):** `cd android && .\gradlew.bat testDebugUnitTest` — cobrem press/release, D-pad (4 direções, diagonais, dead zone), analógico (todas as direções, -1.0/0.0/+1.0, clamp, retorno ao centro) e multi-toque simultâneo.
+
+### Como testar (script PowerShell)
+
+O script `test-axis.ps1` simula o Android: faz o handshake (`connect` → `connect_ack`) e envia valores `-1.0`, `0.0` e `1.0` para os eixos `left_x`, `left_y`, `right_x` e `right_y`.
+
+```powershell
+# 1. Iniciar o servidor em um terminal
+cd windows
+dotnet run --project PhoneWheel.Server/PhoneWheel.Server.csproj
+
+# 2. Em outro terminal, rodar o teste
+.\test-axis.ps1
+```
+
+**No console do servidor:**
+
+```
+[20:30:00.350] [INFO] Eixo left_x = -1.000 de 127.0.0.1
+[20:30:00.450] [INFO] Eixo left_x = 0.000 de 127.0.0.1
+[20:30:00.550] [INFO] Eixo left_x = 1.000 de 127.0.0.1
+[20:30:00.650] [INFO] Eixo left_y = -1.000 de 127.0.0.1
+...
+```
+
+### Mapeamento de eixos
+
+| Eixo (pacote) | vJoy | Xbox 360 (ViGEmBus) |
+|---------------|------|---------------------|
+| `left_x` | Eixo X | LeftThumbX |
+| `left_y` | Eixo Y | LeftThumbY |
+| `right_x` | Eixo Rx | RightThumbX |
+| `right_y` | Eixo Ry | RightThumbY |
+| `left_trigger` | Reservado (não suportado) | Reservado (não suportado) |
+| `right_trigger` | Reservado (não suportado) | Reservado (não suportado) |
+
+> **Nota**: no vJoy, cada eixo deve estar habilitado no **Configure vJoy** (X, Y, Rx, Ry). Se um eixo não estiver habilitado, o servidor loga erro sem derrubar o processo. O pacote `axis` também mantém a conexão ativa no watchdog.
 
 ---
 
@@ -344,7 +408,8 @@ Conexão restaurada
 | `test-discovery.ps1` | Descoberta de servidor (broadcast) | `.\test-discovery.ps1` |
 | `test-udp-client.ps1` | Envio de pacotes UDP (válidos/inválidos) | `.\test-udp-client.ps1` |
 | `test-steering-processing.ps1` | Cenários de direção (10 casos) | `.\test-steering-processing.ps1` |
-| `test-button.ps1` | Handshake + eventos de botão (press/release) | `.\test-button.ps1` |
+| `test-button.ps1` | Handshake + eventos de botão (press/release, 0–13) | `.\test-button.ps1` |
+| `test-axis.ps1` | Handshake + eixos analógicos (left_x/left_y/right_x/right_y, -1/0/1) | `.\test-axis.ps1` |
 
 > Todos os scripts exigem o servidor Windows rodando (exceto o teste de timeout do handshake, que espera o servidor **parado**).
 
@@ -358,6 +423,7 @@ Conexão restaurada
 | Estabilidade/watchdog | — | ✅ PASS |
 | Controle virtual (vJoy/ViGEmBus) | — | ✅ Implementado (teste em jogo pendente) |
 | Botões (pacote `button`) | — | ✅ Implementado (Android + Windows) |
+| Eixos analógicos (pacote `axis`) | — | ✅ Implementado (Windows + componentes Android prontos) |
 | Testador de controle (controllertest.io) | — | ✅ Implementado (aba WebView2 na UI) |
 
 ---

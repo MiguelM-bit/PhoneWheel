@@ -245,7 +245,7 @@ Enviado pelo Android quando o usuário pressiona ou libera um botão. Permite ac
 | Campo       | Tipo   | Descrição                                                                 |
 |-------------|--------|---------------------------------------------------------------------------|
 | `type`      | string | Sempre `"button"` para pacotes de evento de botão                         |
-| `button`    | int    | Identificador lógico do botão (0 = A, 1 = B, 2 = X, 3 = Y, 4 = LB, 5 = RB, 6 = LS, 7 = RS, 8 = Back, 9 = Start) |
+| `button`    | int    | Identificador lógico do botão (0 = A, 1 = B, 2 = X, 3 = Y, 4 = LB, 5 = RB, 6 = LS, 7 = RS, 8 = Back, 9 = Start, 10 = DPadUp, 11 = DPadDown, 12 = DPadLeft, 13 = DPadRight) |
 | `pressed`   | bool   | `true` para pressionado, `false` para liberado                            |
 | `timestamp` | long   | Timestamp local do Android em milissegundos                               |
 
@@ -256,10 +256,59 @@ Enviado pelo Android quando o usuário pressiona ou libera um botão. Permite ac
 3. **Windows** encaminha o evento ao controle virtual (`SetButton(button, pressed)`).
 4. O mapeamento do identificador lógico para o botão físico depende do backend:
    - **vJoy**: o identificador é usado diretamente como índice de botão do dispositivo.
-   - **Xbox 360 (ViGEmBus)**: 0-9 mapeiam para A, B, X, Y, LB, RB, LS, RS, Back, Start.
+   - **Xbox 360 (ViGEmBus)**: 0-13 mapeiam para A, B, X, Y, LB, RB, LS, RS, Back, Start, DPadUp, DPadDown, DPadLeft, DPadRight.
 5. Botões fora do intervalo suportado são rejeitados pelo Windows (log de erro, sem derrubar o servidor).
 
 > **Nota**: O pacote `button` também conta como "pacote recebido" para o watchdog de conexão, mantendo a conexão ativa mesmo sem pacotes de steering.
+
+---
+
+## 📦 Pacote: `axis` (Eixo Analógico)
+
+Enviado pelo Android quando o usuário move um analógico (stick). Permite controlar os eixos analógicos do controle virtual (vJoy / Xbox 360) no Windows.
+
+### Formato
+
+```json
+{
+  "type": "axis",
+  "axis": "left_x",
+  "value": 0.75,
+  "timestamp": 123456789
+}
+```
+
+### Descrição dos Campos
+
+| Campo       | Tipo   | Descrição                                                                 |
+|-------------|--------|---------------------------------------------------------------------------|
+| `type`      | string | Sempre `"axis"` para pacotes de eixo analógico                            |
+| `axis`      | string | Nome do eixo: `left_x`, `left_y`, `right_x`, `right_y`, `left_trigger`, `right_trigger` |
+| `value`     | float  | Valor normalizado do eixo. Sticks: `[-1.0, 1.0]`. Triggers: `[0.0, 1.0]` (reservado) |
+| `timestamp` | long   | Timestamp local do Android em milissegundos                               |
+
+### Eixos suportados
+
+| Nome           | Descrição                          | Intervalo |
+|----------------|------------------------------------|-----------|
+| `left_x`       | Analógico esquerdo, eixo X         | [-1.0, 1.0] |
+| `left_y`       | Analógico esquerdo, eixo Y         | [-1.0, 1.0] |
+| `right_x`      | Analógico direito, eixo X          | [-1.0, 1.0] |
+| `right_y`      | Analógico direito, eixo Y          | [-1.0, 1.0] |
+| `left_trigger` | Gatilho esquerdo (reservado)       | [0.0, 1.0] |
+| `right_trigger`| Gatilho direito (reservado)        | [0.0, 1.0] |
+
+### Comportamento Esperado
+
+1. **Android** envia `axis` sempre que o valor de um eixo muda.
+2. **Windows** valida que o cliente está autenticado (handshake `connect` concluído) antes de processar.
+3. **Windows** encaminha o evento ao controle virtual (`SetAxis(axis, value)`).
+4. O mapeamento do eixo para o backend:
+   - **vJoy**: `left_x` → eixo X, `left_y` → eixo Y, `right_x` → eixo Rx, `right_y` → eixo Ry. O eixo deve estar habilitado no vJoy Config.
+   - **Xbox 360 (ViGEmBus)**: `left_x` → LeftThumbX, `left_y` → LeftThumbY, `right_x` → RightThumbX, `right_y` → RightThumbY.
+5. Eixos desconhecidos ou valores fora do intervalo são rejeitados pelo Windows (log de erro, sem derrubar o servidor).
+
+> **Nota**: O pacote `axis` também conta como "pacote recebido" para o watchdog de conexão, mantendo a conexão ativa mesmo sem pacotes de steering.
 
 ---
 

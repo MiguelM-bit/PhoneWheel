@@ -124,7 +124,8 @@ public class ServerEngine : IDisposable
         _server.DiscoverPacketReceived += OnDiscoverPacketReceived;
         _server.SteeringDataReceived += OnSteeringDataReceived;
                 _server.ButtonPacketReceived += OnButtonPacketReceived;
-                _server.InvalidPacketReceived += OnInvalidPacketReceived;
+                        _server.AxisPacketReceived += OnAxisPacketReceived;
+                        _server.InvalidPacketReceived += OnInvalidPacketReceived;
     }
 
     /// <summary>Indica se o servidor está em execução.</summary>
@@ -550,6 +551,63 @@ public class ServerEngine : IDisposable
         catch (Exception ex)
         {
             Log(EngineLogLevel.Error, "Erro ao processar pacote de botão: {0}", ex.Message);
+        }
+    }
+
+    private void OnAxisPacketReceived(object? sender, AxisPacketReceivedEventArgs args)
+    {
+        try
+        {
+            var ipKey = args.RemoteEndPoint.Address.ToString();
+
+            // Apenas processar eixos de clientes autenticados
+            if (!_connectedClients.TryGetValue(ipKey, out var clientInfo))
+            {
+                Log(EngineLogLevel.Warning, "Eixo recebido de {0}:{1}, mas cliente não está autenticado",
+                    ipKey, args.RemoteEndPoint.Port);
+                return;
+            }
+
+            // Atualizar informações do cliente
+            _connectedClients.TryUpdate(
+                ipKey,
+                clientInfo with
+                {
+                    LastPacketAt = DateTimeOffset.UtcNow,
+                    RemoteEndPoint = args.RemoteEndPoint
+                },
+                clientInfo
+            );
+
+            // Registrar no watchdog (pacote válido mantém a conexão ativa)
+            _watchdog?.RecordPacketReceived();
+
+            // Só processar eixos se o watchdog não detectou timeout
+            if (_watchdog?.Status != ConnectionStatus.Connected)
+            {
+                return;
+            }
+
+            // Encaminhar o evento ao controle virtual
+            if (AxisPacket.TryGetAxisId(args.Packet.Axis, out var axisId))
+            {
+                _virtualController.SetAxis(axisId, args.Packet.Value);
+                Log(EngineLogLevel.Info, "Eixo {0} = {1:F3} de {2}",
+                    args.Packet.Axis, args.Packet.Value, ipKey);
+            }
+            else
+            {
+                Log(EngineLogLevel.Warning, "Eixo desconhecido '{0}' de {1}",
+                    args.Packet.Axis, ipKey);
+            }
+        }
+        catch (VirtualControllerException ex)
+        {
+            Log(EngineLogLevel.Error, "Erro ao processar eixo: {0}", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Log(EngineLogLevel.Error, "Erro ao processar pacote de eixo: {0}", ex.Message);
         }
     }
 

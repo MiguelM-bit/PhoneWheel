@@ -2,6 +2,7 @@ package com.phonewheel.network
 
 import com.phonewheel.model.SteeringPacket
 import com.phonewheel.model.ButtonPacket
+import com.phonewheel.model.AxisPacket
 import com.phonewheel.model.ConnectAckPacket
 import com.phonewheel.model.HeartbeatPacket
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +29,8 @@ import java.net.SocketTimeoutException
  */
 class UdpClient(
     private val serializer: PacketSerializer = PacketSerializer(),
-    private val buttonSerializer: ButtonPacketSerializer = ButtonPacketSerializer()
+    private val buttonSerializer: ButtonPacketSerializer = ButtonPacketSerializer(),
+    private val axisSerializer: AxisPacketSerializer = AxisPacketSerializer()
 ) {
 
     private var socket: DatagramSocket? = null
@@ -117,8 +119,29 @@ class UdpClient(
         }
 
         /**
-         * Envia pacote de conexão (handshake)
+                 * Envia um pacote de evento de eixo analógico
          */
+                suspend fun sendAxis(packet: AxisPacket) = withContext(Dispatchers.IO) {
+                    val currentSocket = socket
+                    val currentAddress = remoteAddress
+
+                    if (currentSocket == null || currentAddress == null || !isConnected()) {
+                        return@withContext
+                    }
+
+                    try {
+                        val payload = axisSerializer.serialize(packet)
+                        val datagramPacket = DatagramPacket(payload, payload.size, currentAddress, remotePort)
+                        currentSocket.send(datagramPacket)
+                    } catch (e: IOException) {
+                        lastError = e.message ?: "Falha ao enviar pacote"
+                        _connectionState.value = ConnectionState.DISCONNECTED
+                    }
+                }
+
+                /**
+                 * Envia pacote de conexão (handshake)
+                 */
         suspend fun sendConnect(connectPacket: com.phonewheel.model.ConnectPacket): Boolean = withContext(Dispatchers.IO) {
         val currentSocket = socket
         val currentAddress = remoteAddress

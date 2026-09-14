@@ -1,3 +1,5 @@
+using PhoneWheel.Server.Models;
+
 namespace PhoneWheel.Server.VirtualController;
 
 /// <summary>
@@ -61,6 +63,19 @@ public interface IVirtualController : IDisposable
     /// Se não estiver conectado ou o botão não existir.
     /// </exception>
     void SetButton(int button, bool pressed);
+
+    /// <summary>
+    /// Define a posição de um eixo analógico.
+    ///
+    /// Para sticks (LeftStickX/Y, RightStickX/Y), o valor deve estar normalizado entre -1.0 e +1.0.
+    /// Para triggers, o valor deve estar normalizado entre 0.0 e 1.0 (não suportado atualmente, lança exceção).
+    /// </summary>
+    /// <param name="axis">Eixo analógico a ser alterado.</param>
+    /// <param name="value">Valor normalizado do eixo.</param>
+    /// <exception cref="VirtualControllerException">
+    /// Se não estiver conectado, o eixo não for suportado pelo backend ou não estiver habilitado.
+    /// </exception>
+    void SetAxis(AxisId axis, double value);
 
     /// <summary>
     /// Desconecta do dispositivo virtual e libera recursos.

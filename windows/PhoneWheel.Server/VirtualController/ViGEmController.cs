@@ -2,6 +2,7 @@ using System;
 using Nefarius.ViGEm.Client;
 using Nefarius.ViGEm.Client.Targets;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
+using PhoneWheel.Server.Models;
 
 namespace PhoneWheel.Server.VirtualController;
 
@@ -188,9 +189,13 @@ public class ViGEmController : IVirtualController
                         7 => Xbox360Button.RightThumb,
                         8 => Xbox360Button.Back,
                         9 => Xbox360Button.Start,
-                        _ => throw new VirtualControllerException(
-                            $"Botão {button} não existe no controle Xbox 360.")
-                    };
+                                            10 => Xbox360Button.Up,
+                                            11 => Xbox360Button.Down,
+                                            12 => Xbox360Button.Left,
+                                            13 => Xbox360Button.Right,
+                                            _ => throw new VirtualControllerException(
+                                                $"Botão {button} não existe no controle Xbox 360.")
+                                        };
 
                     _controller.SetButtonState(xboxButton, pressed);
                 }
@@ -206,6 +211,80 @@ public class ViGEmController : IVirtualController
                 }
             }
         }
+
+    public void SetAxis(AxisId axis, double value)
+    {
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(ViGEmController));
+            }
+
+            if (!_connected)
+            {
+                throw new VirtualControllerException(
+                    "Não conectado ao ViGEmBus. Chame Connect() primeiro.");
+            }
+
+            // Triggers ainda não são suportados pelo backend Xbox 360.
+            if (axis is AxisId.LeftTrigger or AxisId.RightTrigger)
+            {
+                throw new VirtualControllerException(
+                    $"Eixo {axis} (trigger) não é suportado pelo Xbox 360 nesta versão.");
+            }
+
+            // Validar valor normalizado
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                throw new VirtualControllerException(
+                    $"Valor de eixo inválido: {value}");
+            }
+
+            // Limitar a [-1.0, 1.0]
+            var clampedValue = Math.Clamp(value, -1.0, 1.0);
+
+            try
+            {
+                if (_controller == null)
+                {
+                    throw new VirtualControllerException(
+                        "Controle Xbox 360 virtual não inicializado.");
+                }
+
+                // Mapear [-1.0, 1.0] para [AxisMin, AxisMax]
+                // -1.0 → AxisMin
+                //  0.0 → 0
+                // +1.0 → AxisMax
+                var mappedValue = (short)Math.Clamp(
+                    clampedValue * AxisMax,
+                    AxisMin,
+                    AxisMax);
+
+                var xboxAxis = axis switch
+                {
+                    AxisId.LeftStickX => Xbox360Axis.LeftThumbX,
+                    AxisId.LeftStickY => Xbox360Axis.LeftThumbY,
+                    AxisId.RightStickX => Xbox360Axis.RightThumbX,
+                    AxisId.RightStickY => Xbox360Axis.RightThumbY,
+                    _ => throw new VirtualControllerException(
+                        $"Eixo {axis} não existe no controle Xbox 360.")
+                };
+
+                _controller.SetAxisValue(xboxAxis, mappedValue);
+            }
+            catch (VirtualControllerException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _status = VirtualControllerStatus.Error;
+                throw new VirtualControllerException(
+                    $"Erro ao definir eixo: {ex.Message}", ex);
+            }
+        }
+    }
 
     public void Disconnect()
     {

@@ -1,5 +1,6 @@
 using System;
 using CoreDX.vJoy.Wrapper;
+using PhoneWheel.Server.Models;
 
 namespace PhoneWheel.Server.VirtualController;
 
@@ -254,6 +255,113 @@ public class VJoyController : IVirtualController
                 }
             }
         }
+
+    public void SetAxis(AxisId axis, double value)
+    {
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(VJoyController));
+            }
+
+            if (!_connected)
+            {
+                throw new VirtualControllerException(
+                    "Não conectado ao dispositivo vJoy. Chame Connect() primeiro.");
+            }
+
+            // Triggers ainda não são suportados pelo backend vJoy.
+            if (axis is AxisId.LeftTrigger or AxisId.RightTrigger)
+            {
+                throw new VirtualControllerException(
+                    $"Eixo {axis} (trigger) não é suportado pelo vJoy nesta versão.");
+            }
+
+            // Validar valor normalizado
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                throw new VirtualControllerException(
+                    $"Valor de eixo inválido: {value}");
+            }
+
+            // Limitar a [-1.0, 1.0]
+            var clampedValue = Math.Clamp(value, -1.0, 1.0);
+
+            try
+            {
+                if (_controller == null)
+                {
+                    throw new VirtualControllerException(
+                        "Controlador vJoy não inicializado.");
+                }
+
+                // Verificar se o eixo está habilitado no dispositivo vJoy
+                var hasAxis = axis switch
+                {
+                    AxisId.LeftStickX => _controller.HasAxisX,
+                    AxisId.LeftStickY => _controller.HasAxisY,
+                    AxisId.RightStickX => _controller.HasAxisRx,
+                    AxisId.RightStickY => _controller.HasAxisRy,
+                    _ => false
+                };
+
+                if (!hasAxis)
+                {
+                    throw new VirtualControllerException(
+                        $"Dispositivo vJoy {_deviceId} não possui o eixo {GetVJoyAxisName(axis)}. " +
+                        "Habilite-o no 'Configure vJoy'.");
+                }
+
+                // Mapear [-1.0, 1.0] para [0, max]
+                // -1.0 → 0
+                //  0.0 → max / 2
+                // +1.0 → max
+                                var max = _controller.AxisMaxValue ?? 32767;
+                var center = max / 2.0;
+                var range = max / 2.0;
+                var mappedValue = (int)Math.Clamp(center + (clampedValue * range), 0, max);
+
+                var ok = axis switch
+                {
+                    AxisId.LeftStickX => _controller.SetAxisX(mappedValue),
+                    AxisId.LeftStickY => _controller.SetAxisY(mappedValue),
+                    AxisId.RightStickX => _controller.SetAxisRx(mappedValue),
+                    AxisId.RightStickY => _controller.SetAxisRy(mappedValue),
+                    _ => false
+                };
+
+                if (!ok)
+                {
+                    _status = VirtualControllerStatus.Error;
+                    throw new VirtualControllerException(
+                        $"Falha ao enviar valor ao eixo {GetVJoyAxisName(axis)} do vJoy {_deviceId}.");
+                }
+            }
+            catch (VirtualControllerException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _status = VirtualControllerStatus.Error;
+                throw new VirtualControllerException(
+                    $"Erro ao definir eixo: {ex.Message}", ex);
+            }
+        }
+    }
+
+    private static string GetVJoyAxisName(AxisId axis)
+    {
+        return axis switch
+        {
+            AxisId.LeftStickX => "X",
+            AxisId.LeftStickY => "Y",
+            AxisId.RightStickX => "Rx",
+            AxisId.RightStickY => "Ry",
+            _ => axis.ToString()
+        };
+    }
 
     public void Disconnect()
     {

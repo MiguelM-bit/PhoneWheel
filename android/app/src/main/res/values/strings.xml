@@ -23,8 +23,12 @@
     <string name="hint_ip">IP do computador (ex: 192.168.0.10)</string>
     <string name="hint_port">Porta (padrão: 5005)</string>
 
-    <!-- Labels -->
-    <string name="label_angle">Ângulo</string>
+    <!-- Controller Screen -->
+        <string name="controller_title">Controle</string>
+        <string name="controller_placeholder">Controles virtuais em breve</string>
+
+        <!-- Labels -->
+        <string name="label_angle">Ângulo</string>
     <string name="label_gyro">Gyro</string>
     <string name="label_axis">Eixo</string>
     <string name="label_sensitivity">Sensibilidade</string>

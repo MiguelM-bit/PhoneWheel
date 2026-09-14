@@ -313,6 +313,78 @@ public static class PacketParser
             return JsonSerializer.Serialize(dto, JsonOptions);
         }
 
+        /// <summary>
+        /// Tenta desserializar um pacote de eixo (AXIS).
+        /// </summary>
+        public static bool TryParseAxis(string jsonData, out AxisPacket? packet)
+        {
+            packet = null;
+
+            if (string.IsNullOrWhiteSpace(jsonData))
+            {
+                return false;
+            }
+
+            try
+            {
+                var deserialized = JsonSerializer.Deserialize<AxisPacketDto>(jsonData, JsonOptions);
+
+                if (deserialized == null)
+                {
+                    return false;
+                }
+
+                // Validar campos obrigatórios
+                if (string.IsNullOrWhiteSpace(deserialized.Type) || deserialized.Type != AxisPacket.TypeAxis)
+                {
+                    return false;
+                }
+
+                                // Validar nome do eixo (deve ser um eixo conhecido)
+                                if (!AxisPacket.TryGetAxisId(deserialized.Axis, out var axisId))
+                                {
+                                    return false;
+                }
+
+                                // Validar valor numérico
+                                if (double.IsNaN(deserialized.Value) || double.IsInfinity(deserialized.Value))
+                                {
+                                    return false;
+                                }
+
+                                // Validar intervalo: sticks em [-1.0, 1.0]; triggers em [0.0, 1.0]
+                                var isTrigger = axisId is AxisId.LeftTrigger or AxisId.RightTrigger;
+                                var minValue = isTrigger ? 0.0 : -1.0;
+                                if (deserialized.Value < minValue || deserialized.Value > 1.0)
+                                {
+                                    return false;
+                                }
+
+                                if (deserialized.Timestamp < 0)
+                                {
+                                    return false;
+                                }
+
+                packet = new AxisPacket
+                {
+                    Type = deserialized.Type,
+                    Axis = deserialized.Axis,
+                    Value = deserialized.Value,
+                    Timestamp = deserialized.Timestamp
+                };
+
+                return true;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static bool IsValidAngle(double angle)
     {
         return !double.IsNaN(angle) && !double.IsInfinity(angle);
@@ -429,6 +501,21 @@ public static class PacketParser
 
                     [JsonPropertyName("pressed")]
                     public bool Pressed { get; set; }
+
+                    [JsonPropertyName("timestamp")]
+                    public long Timestamp { get; set; }
+                }
+
+                private class AxisPacketDto
+                {
+                    [JsonPropertyName("type")]
+                    public string Type { get; set; } = "";
+
+                    [JsonPropertyName("axis")]
+                    public string Axis { get; set; } = "";
+
+                    [JsonPropertyName("value")]
+                    public double Value { get; set; }
 
                     [JsonPropertyName("timestamp")]
                     public long Timestamp { get; set; }

@@ -36,10 +36,11 @@ Monorepo que integra um **aplicativo Android** (Kotlin) a um **servidor Windows*
 1. **Android** lê o giroscópio, integra a velocidade angular em um ângulo acumulado (`-450°` a `+450°`) e envia pacotes JSON via UDP a cada ~50ms.
 2. **Windows** recebe na porta `5005`, valida o JSON, aplica calibração → deadzone → normalização → suavização e envia o valor normalizado `[-1.0, +1.0]` ao controlador virtual.
 3. **Botões**: a UI do Android envia eventos de botão (`type: "button"`) pela mesma conexão UDP; o servidor valida o cliente e encaminha `button`/`pressed` para `IVirtualController.SetButton()`.
-4. **Handshake**: o Android envia `connect` e só envia `steering`/`button` após receber `connect_ack`.
-5. **Descoberta de servidor**: o Android pode localizar o servidor na rede via broadcast UDP (`discover`/`discover_ack`) sem digitar o IP manualmente.
-6. **Watchdog**: o servidor detecta perda de conexão (500ms sem pacotes), centraliza o volante e **libera todos os botões pressionados** automaticamente.
-7. **Controle virtual**: o valor normalizado é enviado ao backend selecionado — **vJoy** (joystick DirectInput) ou **Xbox 360** (ViGEmBus/XInput) — que os jogos reconhecem como um controle real.
+4. **Eixos analógicos**: o Android pode enviar valores de analógico (`type: "axis"`, ex: `left_x`, `right_y`) normalizados em `[-1.0, 1.0]`; o servidor encaminha para `IVirtualController.SetAxis()`.
+5. **Handshake**: o Android envia `connect` e só envia `steering`/`button`/`axis` após receber `connect_ack`.
+6. **Descoberta de servidor**: o Android pode localizar o servidor na rede via broadcast UDP (`discover`/`discover_ack`) sem digitar o IP manualmente.
+7. **Watchdog**: o servidor detecta perda de conexão (500ms sem pacotes), centraliza o volante e **libera todos os botões pressionados** automaticamente.
+8. **Controle virtual**: o valor normalizado é enviado ao backend selecionado — **vJoy** (joystick DirectInput) ou **Xbox 360** (ViGEmBus/XInput) — que os jogos reconhecem como um controle real.
 
 ## 📁 Estrutura do Monorepo
 
@@ -175,6 +176,7 @@ Instruções de uso e teste — incluindo a **descoberta de servidor** — estã
 | Controle virtual **vJoy** (joystick DirectInput) | ✅ Integração real implementada |
 | Controle virtual **Xbox 360** (ViGEmBus/XInput) | ✅ Integração real implementada |
 | Botões (pacote `button`, Android → Windows) | ✅ Implementado e testado |
+| Eixos analógicos (pacote `axis`, Android → Windows) | ✅ Implementado (infraestrutura) |
 | Liberação de botões na perda de conexão | ✅ Implementado |
 | Teste de controle (controllertest.io na UI) | ✅ Implementado |
 | Teste em jogo real | ⚠️ Pendente (ver [TESTING.md](TESTING.md)) |

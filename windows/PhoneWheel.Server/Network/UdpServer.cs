@@ -51,6 +51,11 @@ public class UdpServer : IDisposable
                 /// </summary>
                 public event EventHandler<ButtonPacketReceivedEventArgs>? ButtonPacketReceived;
 
+                /// <summary>
+                /// Evento disparado quando um pacote válido de eixo (analógico) é recebido.
+                /// </summary>
+                public event EventHandler<AxisPacketReceivedEventArgs>? AxisPacketReceived;
+
     /// <summary>
     /// Evento disparado quando um pacote inválido é recebido.
     /// </summary>
@@ -281,6 +286,17 @@ public class UdpServer : IDisposable
                             return;
                         }
 
+                        // Tentar desserializar como pacote de eixo
+                        if (PacketParser.TryParseAxis(jsonData, out var axisPacket) && axisPacket != null)
+                        {
+                            AxisPacketReceived?.Invoke(this, new AxisPacketReceivedEventArgs
+                            {
+                                RemoteEndPoint = remoteEndPoint,
+                                Packet = axisPacket
+                            });
+                            return;
+                        }
+
                         // Tentar desserializar como pacote de steering
         if (PacketParser.TryParse(jsonData, out var packet) && packet != null)
         {
@@ -350,6 +366,16 @@ public class ButtonPacketReceivedEventArgs : EventArgs
     public required IPEndPoint RemoteEndPoint { get; init; }
 
     public required ButtonPacket Packet { get; init; }
+}
+
+/// <summary>
+/// Argumentos de evento para pacotes de eixo recebidos.
+/// </summary>
+public class AxisPacketReceivedEventArgs : EventArgs
+{
+    public required IPEndPoint RemoteEndPoint { get; init; }
+
+    public required AxisPacket Packet { get; init; }
 }
 
 /// <summary>

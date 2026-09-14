@@ -3,6 +3,7 @@ package com.phonewheel.connection
 import com.phonewheel.model.ConnectPacket
 import com.phonewheel.model.SteeringPacket
 import com.phonewheel.model.ButtonPacket
+import com.phonewheel.model.AxisPacket
 import com.phonewheel.network.ConnectionState
 import com.phonewheel.network.UdpClient
 import kotlinx.coroutines.Dispatchers
@@ -151,6 +152,16 @@ class ConnectionManager(
                 udpClient.sendButton(packet)
             }
         }
+
+                /**
+                 * Envia um pacote de evento de eixo analógico.
+                 * Apenas funciona se estiver conectado.
+                 */
+                suspend fun sendAxisPacket(packet: AxisPacket) {
+                    if (isConnected()) {
+                        udpClient.sendAxis(packet)
+                    }
+                }
 
     /**
      * Realiza o handshake CONNECT → CONNECT_ACK

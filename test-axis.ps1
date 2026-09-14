@@ -1,7 +1,8 @@
 #!/usr/bin/env pwsh
-# Script de teste: pacote de botão (BUTTON) via UDP
+# Script de teste: pacote de eixo analógico (AXIS) via UDP
 # 1. Envia CONNECT e aguarda CONNECT_ACK (autenticação)
-# 2. Envia sequência de BUTTON (press/release) para os botões 0..3
+# 2. Envia sequência de AXIS para left_x, left_y, right_x, right_y
+#    com valores -1.0, 0.0 e 1.0 (verifica que nenhum eixo interfere em outro)
 # 3. Envia STEERING para manter a conexão viva no watchdog
 
 $serverIP = "127.0.0.1"
@@ -9,7 +10,7 @@ $serverPort = 5005
 $connectTimeoutMs = 3000
 
 Write-Host ""
-Write-Host "[TEST] Pacote de Botão (UDP)" -ForegroundColor Cyan
+Write-Host "[TEST] Pacote de Eixo Analógico (UDP)" -ForegroundColor Cyan
 Write-Host ""
 
 # Criar cliente UDP
@@ -63,42 +64,28 @@ if (-not $authenticated) {
     exit 1
 }
 
-# --- Passo 2: Sequência de BUTTON ---
+# --- Passo 2: Sequência de AXIS ---
 Write-Host ""
-Write-Host "[SEND] Enviando sequência de botões (press/release)..." -ForegroundColor Gray
+Write-Host "[SEND] Enviando sequência de eixos (left_x, left_y, right_x, right_y)..." -ForegroundColor Gray
 
-# Mapeamento oficial: 0=A, 1=B, 2=X, 3=Y, 4=LB, 5=RB, 6=LS, 7=RS, 8=Back, 9=Start,
-# 10=DPadUp, 11=DPadDown, 12=DPadLeft, 13=DPadRight
-$buttons = @(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
+$axes = @("left_x", "left_y", "right_x", "right_y")
+$values = @(-1.0, 0.0, 1.0)
 
-foreach ($button in $buttons) {
-    # Pressionar
-    $press = @{
-        type = "button"
-        button = $button
-        pressed = $true
-        timestamp = [System.DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-    } | ConvertTo-Json
+foreach ($axis in $axes) {
+    foreach ($value in $values) {
+        $packet = @{
+            type = "axis"
+            axis = $axis
+            value = $value
+            timestamp = [System.DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+        } | ConvertTo-Json
 
-    $pressBytes = [System.Text.Encoding]::UTF8.GetBytes($press)
-    $udpClient.Send($pressBytes, $pressBytes.Length, $remoteEndPoint) | Out-Null
-    Write-Host "[SEND] Botão $button pressionado" -ForegroundColor Gray
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($packet)
+        $udpClient.Send($bytes, $bytes.Length, $remoteEndPoint) | Out-Null
+        Write-Host "[SEND] Eixo $axis = $value" -ForegroundColor Gray
 
-    Start-Sleep -Milliseconds 150
-
-    # Liberar
-    $release = @{
-        type = "button"
-        button = $button
-        pressed = $false
-        timestamp = [System.DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-    } | ConvertTo-Json
-
-    $releaseBytes = [System.Text.Encoding]::UTF8.GetBytes($release)
-    $udpClient.Send($releaseBytes, $releaseBytes.Length, $remoteEndPoint) | Out-Null
-    Write-Host "[SEND] Botão $button liberado" -ForegroundColor Gray
-
-    Start-Sleep -Milliseconds 150
+        Start-Sleep -Milliseconds 100
+    }
 }
 
 # --- Passo 3: STEERING para manter a conexão viva ---
@@ -116,4 +103,4 @@ $udpClient.Send($steeringBytes, $steeringBytes.Length, $remoteEndPoint) | Out-Nu
 
 $udpClient.Close()
 Write-Host ""
-Write-Host "[OK] Teste de botões finalizado. Verifique a saída do servidor." -ForegroundColor Green
+Write-Host "[OK] Teste de eixos finalizado. Verifique a saída do servidor." -ForegroundColor Green

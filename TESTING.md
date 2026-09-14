@@ -219,6 +219,74 @@ Com os drivers instalados (ver [README.md](README.md#-drivers-de-controle-virtua
 
 ---
 
+## 🔘 Botões (pacote `button`)
+
+O servidor Windows processa eventos de botão (`type: "button"`) e os encaminha ao controle virtual. O app Android já envia esses eventos pela conexão UDP existente.
+
+### Como testar (no app Android)
+
+1. Iniciar o servidor Windows (UI ou console).
+2. No Android, conectar ao servidor (buscar ou digitar IP).
+3. Ao conectar, o card **"Gamepad (teste)"** aparece com 10 botões touch.
+4. Tocar e segurar um botão → o servidor loga `Botão N pressionado`; soltar → `Botão N liberado`.
+
+**Mapeamento dos botões touch:**
+
+| Botão | ID | vJoy | Xbox 360 (ViGEmBus) |
+|-------|----|------|---------------------|
+| A | 0 | Botão 0 | A |
+| B | 1 | Botão 1 | B |
+| X | 2 | Botão 2 | X |
+| Y | 3 | Botão 3 | Y |
+| LB | 4 | Botão 4 | LB |
+| RB | 5 | Botão 5 | RB |
+| LT | 6 | Botão 6 | LS |
+| RT | 7 | Botão 7 | RS |
+| Back | 8 | Botão 8 | Back |
+| Start | 9 | Botão 9 | Start |
+
+> **Nota**: pressionar um botão já pressionado (ou liberar um já liberado) não gera pacote duplicado. Ao desconectar, todos os botões são liberados automaticamente (`releaseAll`).
+
+### Como testar (script PowerShell)
+
+O script `test-button.ps1` simula o Android: faz o handshake (`connect` → `connect_ack`) e envia uma sequência de press/release para os botões 0..3.
+
+```powershell
+# 1. Iniciar o servidor em um terminal
+cd windows
+dotnet run --project PhoneWheel.Server/PhoneWheel.Server.csproj
+
+# 2. Em outro terminal, rodar o teste
+.\test-button.ps1
+```
+
+**Saída esperada (PASS):**
+
+```
+[OK] CONNECT_ACK recebido de 127.0.0.1:5005
+[SEND] Botão 0 pressionado
+[SEND] Botão 0 liberado
+[SEND] Botão 1 pressionado
+...
+```
+
+**No console do servidor:**
+
+```
+[20:30:00.123] [OK] CONNECT recebido de 127.0.0.1:54321
+[20:30:00.200] [INFO] CONNECT_ACK enviado para 127.0.0.1:54321
+[20:30:00.350] [INFO] Botão 0 pressionado de 127.0.0.1
+[20:30:00.500] [INFO] Botão 0 liberado de 127.0.0.1
+```
+
+### Mapeamento de botões
+
+O mapeamento completo (ID → vJoy → Xbox 360) está na tabela da seção **"Como testar (no app Android)"** acima.
+
+> **Nota**: botões fora do intervalo suportado (ex: >9 no Xbox 360) são rejeitados com log de erro, sem derrubar o servidor. O pacote `button` também mantém a conexão ativa no watchdog.
+
+---
+
 ## 🛡️ Estabilidade (watchdog)
 
 O servidor centraliza o volante (vJoy Z = 0) após **500ms sem pacotes** e restaura quando os pacotes voltam.
@@ -246,6 +314,7 @@ Conexão restaurada
 | `test-discovery.ps1` | Descoberta de servidor (broadcast) | `.\test-discovery.ps1` |
 | `test-udp-client.ps1` | Envio de pacotes UDP (válidos/inválidos) | `.\test-udp-client.ps1` |
 | `test-steering-processing.ps1` | Cenários de direção (10 casos) | `.\test-steering-processing.ps1` |
+| `test-button.ps1` | Handshake + eventos de botão (press/release) | `.\test-button.ps1` |
 
 > Todos os scripts exigem o servidor Windows rodando (exceto o teste de timeout do handshake, que espera o servidor **parado**).
 
@@ -258,6 +327,7 @@ Conexão restaurada
 | Steering (10 cenários) | — | ✅ ALL PASS |
 | Estabilidade/watchdog | — | ✅ PASS |
 | Controle virtual (vJoy/ViGEmBus) | — | ✅ Implementado (teste em jogo pendente) |
+| Botões (pacote `button`) | — | ✅ Implementado (Android + Windows) |
 
 ---
 

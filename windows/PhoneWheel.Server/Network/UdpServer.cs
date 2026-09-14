@@ -46,6 +46,11 @@ public class UdpServer : IDisposable
         /// </summary>
         public event EventHandler<SteeringDataReceivedEventArgs>? SteeringDataReceived;
 
+                /// <summary>
+                /// Evento disparado quando um pacote válido de botão é recebido.
+                /// </summary>
+                public event EventHandler<ButtonPacketReceivedEventArgs>? ButtonPacketReceived;
+
     /// <summary>
     /// Evento disparado quando um pacote inválido é recebido.
     /// </summary>
@@ -265,7 +270,18 @@ public class UdpServer : IDisposable
             return;
         }
 
-        // Tentar desserializar como pacote de steering
+                        // Tentar desserializar como pacote de botão
+                        if (PacketParser.TryParseButton(jsonData, out var buttonPacket) && buttonPacket != null)
+                        {
+                            ButtonPacketReceived?.Invoke(this, new ButtonPacketReceivedEventArgs
+                            {
+                                RemoteEndPoint = remoteEndPoint,
+                                Packet = buttonPacket
+                            });
+                            return;
+                        }
+
+                        // Tentar desserializar como pacote de steering
         if (PacketParser.TryParse(jsonData, out var packet) && packet != null)
         {
             SteeringDataReceived?.Invoke(this, new SteeringDataReceivedEventArgs
@@ -324,6 +340,16 @@ public class SteeringDataReceivedEventArgs : EventArgs
     public required IPEndPoint RemoteEndPoint { get; init; }
 
     public required SteeringPacket Packet { get; init; }
+}
+
+/// <summary>
+/// Argumentos de evento para pacotes de botão recebidos.
+/// </summary>
+public class ButtonPacketReceivedEventArgs : EventArgs
+{
+    public required IPEndPoint RemoteEndPoint { get; init; }
+
+    public required ButtonPacket Packet { get; init; }
 }
 
 /// <summary>

@@ -225,6 +225,44 @@ Enviado pelo servidor Windows periodicamente (ex: a cada 1 segundo) para os clie
 
 ---
 
+## 📦 Pacote: `button` (Evento de Botão)
+
+Enviado pelo Android quando o usuário pressiona ou libera um botão. Permite acionar botões do controle virtual (vJoy / Xbox 360) no Windows.
+
+### Formato
+
+```json
+{
+  "type": "button",
+  "button": 0,
+  "pressed": true,
+  "timestamp": 123456789
+}
+```
+
+### Descrição dos Campos
+
+| Campo       | Tipo   | Descrição                                                                 |
+|-------------|--------|---------------------------------------------------------------------------|
+| `type`      | string | Sempre `"button"` para pacotes de evento de botão                         |
+| `button`    | int    | Identificador lógico do botão (0 = A, 1 = B, 2 = X, 3 = Y, 4 = LB, 5 = RB, 6 = LS, 7 = RS, 8 = Back, 9 = Start) |
+| `pressed`   | bool   | `true` para pressionado, `false` para liberado                            |
+| `timestamp` | long   | Timestamp local do Android em milissegundos                               |
+
+### Comportamento Esperado
+
+1. **Android** envia `button` sempre que o estado de um botão muda (press ou release).
+2. **Windows** valida que o cliente está autenticado (handshake `connect` concluído) antes de processar.
+3. **Windows** encaminha o evento ao controle virtual (`SetButton(button, pressed)`).
+4. O mapeamento do identificador lógico para o botão físico depende do backend:
+   - **vJoy**: o identificador é usado diretamente como índice de botão do dispositivo.
+   - **Xbox 360 (ViGEmBus)**: 0-9 mapeiam para A, B, X, Y, LB, RB, LS, RS, Back, Start.
+5. Botões fora do intervalo suportado são rejeitados pelo Windows (log de erro, sem derrubar o servidor).
+
+> **Nota**: O pacote `button` também conta como "pacote recebido" para o watchdog de conexão, mantendo a conexão ativa mesmo sem pacotes de steering.
+
+---
+
 ## 🔄 Fluxo de Comunicação Completo
 
 ```

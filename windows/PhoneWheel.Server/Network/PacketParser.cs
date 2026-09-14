@@ -177,6 +177,63 @@ public static class PacketParser
     }
 
         /// <summary>
+        /// Tenta desserializar um pacote de botão (BUTTON).
+        /// </summary>
+        public static bool TryParseButton(string jsonData, out ButtonPacket? packet)
+        {
+            packet = null;
+
+            if (string.IsNullOrWhiteSpace(jsonData))
+            {
+                return false;
+            }
+
+            try
+            {
+                var deserialized = JsonSerializer.Deserialize<ButtonPacketDto>(jsonData, JsonOptions);
+
+                if (deserialized == null)
+                {
+                    return false;
+                }
+
+                // Validar campos obrigatórios
+                if (string.IsNullOrWhiteSpace(deserialized.Type) || deserialized.Type != ButtonPacket.TypeButton)
+                {
+                    return false;
+                }
+
+                if (deserialized.Button < 0)
+                {
+                    return false;
+                }
+
+                if (deserialized.Timestamp < 0)
+                {
+                    return false;
+                }
+
+                packet = new ButtonPacket
+                {
+                    Type = deserialized.Type,
+                    Button = deserialized.Button,
+                    Pressed = deserialized.Pressed,
+                    Timestamp = deserialized.Timestamp
+                };
+
+                return true;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Tenta desserializar um pacote de descoberta (DISCOVER).
         /// </summary>
         public static bool TryParseDiscover(string jsonData, out DiscoverPacket? packet)
@@ -361,4 +418,19 @@ public static class PacketParser
             [JsonPropertyName("timestamp")]
             public long Timestamp { get; set; }
         }
-    }
+
+                private class ButtonPacketDto
+                {
+                    [JsonPropertyName("type")]
+                    public string Type { get; set; } = "";
+
+                    [JsonPropertyName("button")]
+                    public int Button { get; set; }
+
+                    [JsonPropertyName("pressed")]
+                    public bool Pressed { get; set; }
+
+                    [JsonPropertyName("timestamp")]
+                    public long Timestamp { get; set; }
+                }
+            }

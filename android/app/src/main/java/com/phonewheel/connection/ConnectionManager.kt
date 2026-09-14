@@ -2,6 +2,7 @@ package com.phonewheel.connection
 
 import com.phonewheel.model.ConnectPacket
 import com.phonewheel.model.SteeringPacket
+import com.phonewheel.model.ButtonPacket
 import com.phonewheel.network.ConnectionState
 import com.phonewheel.network.UdpClient
 import kotlinx.coroutines.Dispatchers
@@ -140,6 +141,16 @@ class ConnectionManager(
             udpClient.send(packet)
         }
     }
+
+        /**
+         * Envia um pacote de evento de botão.
+         * Apenas funciona se estiver conectado.
+         */
+        suspend fun sendButtonPacket(packet: ButtonPacket) {
+            if (isConnected()) {
+                udpClient.sendButton(packet)
+            }
+        }
 
     /**
      * Realiza o handshake CONNECT → CONNECT_ACK

@@ -6,11 +6,14 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import android.content.res.ColorStateList
 import android.os.Bundle
+import android.view.MotionEvent
+import android.view.View
 import android.widget.Toast
 import com.phonewheel.R
 import com.phonewheel.databinding.ActivityMainBinding
 import com.phonewheel.connection.ConnectionManager
 import com.phonewheel.model.SteeringPacket
+import com.phonewheel.network.ButtonSender
 import com.phonewheel.network.ConnectionState
 import com.phonewheel.network.ServerDiscovery
 import com.phonewheel.sensor.GyroscopeManager
@@ -33,20 +36,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var steeringProcessor: SteeringProcessor
     private lateinit var connectionManager: ConnectionManager
     private lateinit var serverDiscovery: ServerDiscovery
+        private lateinit var buttonSender: ButtonSender
 
-    private var sendingJob: Job? = null
+        private var sendingJob: Job? = null
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
         
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+            binding = ActivityMainBinding.inflate(layoutInflater)
+            setContentView(binding.root)
         
-        setupSteeringProcessor()
-        setupGyroscope()
-        setupButtons()
-        setupNetwork()
-    }
+            setupSteeringProcessor()
+            setupGyroscope()
+            setupButtons()
+            setupNetwork()
+            setupGamepadButtons()
+        }
 
     private fun setupSteeringProcessor() {
         steeringProcessor = SteeringProcessor(
@@ -111,9 +116,35 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupNetwork() {
-        connectionManager = ConnectionManager()
-        serverDiscovery = ServerDiscovery()
+    private fun setupGamepadButtons() {
+            val gamepadButtons = listOf(
+                binding.buttonGamepadA to 0,
+                binding.buttonGamepadB to 1,
+                binding.buttonGamepadX to 2,
+                binding.buttonGamepadY to 3,
+                binding.buttonGamepadLb to 4,
+                binding.buttonGamepadRb to 5,
+                binding.buttonGamepadLt to 6,
+                binding.buttonGamepadRt to 7,
+                binding.buttonGamepadBack to 8,
+                binding.buttonGamepadStart to 9
+            )
+
+            for ((button, index) in gamepadButtons) {
+                button.setOnTouchListener { _, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> buttonSender.press(index)
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> buttonSender.release(index)
+                    }
+                    false
+                }
+            }
+        }
+
+        private fun setupNetwork() {
+            connectionManager = ConnectionManager()
+            serverDiscovery = ServerDiscovery()
+            buttonSender = ButtonSender(connectionManager)
 
         binding.buttonConnect.setOnClickListener { onConnectClicked() }
         binding.buttonDisconnect.setOnClickListener { onDisconnectClicked() }
@@ -189,11 +220,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun onDisconnectClicked() {
         stopSendingSteeringUpdates()
-        connectionManager.disconnect()
-        binding.buttonConnect.isEnabled = true
-        binding.editTextIp.isEnabled = true
-        binding.editTextPort.isEnabled = true
-    }
+            lifecycleScope.launch {
+                buttonSender.releaseAll()
+                connectionManager.disconnect()
+            }
+            binding.buttonConnect.isEnabled = true
+            binding.editTextIp.isEnabled = true
+            binding.editTextPort.isEnabled = true
+        }
 
     private fun startSendingSteeringUpdates() {
         stopSendingSteeringUpdates()
@@ -214,7 +248,7 @@ class MainActivity : AppCompatActivity() {
         sendingJob = null
     }
 
-    private fun updateConnectionUi(state: ConnectionState) {
+    private suspend fun updateConnectionUi(state: ConnectionState) {
             val (statusText, statusColor) = when (state) {
                 ConnectionState.CONNECTED ->
                     getString(R.string.status_connected) to ContextCompat.getColor(this, R.color.status_connected)
@@ -235,26 +269,32 @@ class MainActivity : AppCompatActivity() {
                     binding.buttonDisconnect.isEnabled = true
                     binding.editTextIp.isEnabled = false
                     binding.editTextPort.isEnabled = false
-                }
-                ConnectionState.CONNECTING -> {
-                    binding.buttonConnect.isEnabled = false
-                    binding.buttonDisconnect.isEnabled = false
-                    binding.editTextIp.isEnabled = false
-                    binding.editTextPort.isEnabled = false
-                }
-                ConnectionState.DISCONNECTED -> {
-                    binding.buttonConnect.isEnabled = true
-                    binding.buttonDisconnect.isEnabled = false
-                    binding.editTextIp.isEnabled = true
-                    binding.editTextPort.isEnabled = true
-                }
-                ConnectionState.CONNECTION_LOST -> {
-                    binding.buttonConnect.isEnabled = true
-                    binding.buttonDisconnect.isEnabled = false
-                    binding.editTextIp.isEnabled = true
-                    binding.editTextPort.isEnabled = true
-                }
-        }
+                                binding.gamepadCard.visibility = View.VISIBLE
+                            }
+                            ConnectionState.CONNECTING -> {
+                                binding.buttonConnect.isEnabled = false
+                                binding.buttonDisconnect.isEnabled = false
+                                binding.editTextIp.isEnabled = false
+                                binding.editTextPort.isEnabled = false
+                                binding.gamepadCard.visibility = View.GONE
+                            }
+                            ConnectionState.DISCONNECTED -> {
+                                binding.buttonConnect.isEnabled = true
+                                binding.buttonDisconnect.isEnabled = false
+                                binding.editTextIp.isEnabled = true
+                                binding.editTextPort.isEnabled = true
+                                binding.gamepadCard.visibility = View.GONE
+                                buttonSender.releaseAll()
+                            }
+                            ConnectionState.CONNECTION_LOST -> {
+                                binding.buttonConnect.isEnabled = true
+                                binding.buttonDisconnect.isEnabled = false
+                                binding.editTextIp.isEnabled = true
+                                binding.editTextPort.isEnabled = true
+                                binding.gamepadCard.visibility = View.GONE
+                                buttonSender.releaseAll()
+                            }
+                    }
     }
 
         private fun updateDisplay() {

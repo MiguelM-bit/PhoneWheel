@@ -31,4 +31,18 @@
     <string name="label_range">Range</string>
     <string name="label_connection">Conexão UDP</string>
     <string name="label_controls">Controles</string>
-</resources>
+        <string name="label_gamepad">Gamepad (teste)</string>
+        <string name="gamepad_hint">Toque e segure para pressionar</string>
+
+        <!-- Botões do gamepad -->
+        <string name="button_a">A</string>
+        <string name="button_b">B</string>
+        <string name="button_x">X</string>
+        <string name="button_y">Y</string>
+        <string name="button_lb">LB</string>
+        <string name="button_rb">RB</string>
+        <string name="button_lt">LT</string>
+        <string name="button_rt">RT</string>
+        <string name="button_back">Back</string>
+        <string name="button_start">Start</string>
+    </resources>

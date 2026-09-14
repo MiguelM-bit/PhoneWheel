@@ -122,7 +122,8 @@ public class ServerEngine : IDisposable
         _server.ConnectPacketReceived += OnConnectPacketReceived;
         _server.DiscoverPacketReceived += OnDiscoverPacketReceived;
         _server.SteeringDataReceived += OnSteeringDataReceived;
-        _server.InvalidPacketReceived += OnInvalidPacketReceived;
+                _server.ButtonPacketReceived += OnButtonPacketReceived;
+                _server.InvalidPacketReceived += OnInvalidPacketReceived;
     }
 
     /// <summary>Indica se o servidor está em execução.</summary>
@@ -482,6 +483,52 @@ public class ServerEngine : IDisposable
         catch (Exception ex)
         {
             Log(EngineLogLevel.Error, "Erro ao processar pacote: {0}", ex.Message);
+        }
+    }
+
+    private void OnButtonPacketReceived(object? sender, ButtonPacketReceivedEventArgs args)
+    {
+        try
+        {
+            var ipKey = args.RemoteEndPoint.Address.ToString();
+
+            // Apenas processar botões de clientes autenticados
+            if (!_connectedClients.TryGetValue(ipKey, out var clientInfo))
+            {
+                Log(EngineLogLevel.Warning, "Botão recebido de {0}:{1}, mas cliente não está autenticado",
+                    ipKey, args.RemoteEndPoint.Port);
+                return;
+            }
+
+            // Atualizar informações do cliente
+            _connectedClients.TryUpdate(
+                ipKey,
+                clientInfo with
+                {
+                    LastPacketAt = DateTimeOffset.UtcNow,
+                    RemoteEndPoint = args.RemoteEndPoint
+                },
+                clientInfo
+            );
+
+            // Registrar no watchdog (pacote válido mantém a conexão ativa)
+            _watchdog?.RecordPacketReceived();
+
+            // Encaminhar o evento ao controle virtual
+            _virtualController.SetButton(args.Packet.Button, args.Packet.Pressed);
+
+            Log(EngineLogLevel.Info, "Botão {0} {1} de {2}",
+                args.Packet.Button,
+                args.Packet.Pressed ? "pressionado" : "liberado",
+                ipKey);
+        }
+        catch (VirtualControllerException ex)
+        {
+            Log(EngineLogLevel.Error, "Erro ao processar botão: {0}", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Log(EngineLogLevel.Error, "Erro ao processar pacote de botão: {0}", ex.Message);
         }
     }
 

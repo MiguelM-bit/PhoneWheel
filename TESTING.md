@@ -168,14 +168,60 @@ $ack = $socket.Receive([ref](New-Object System.Net.IPEndPoint([Net.IPAddress]::A
 
 ```
 Ângulo recebido → Calibração (offset) → Deadzone (±5°) → Clamp [-450°, +450°]
-→ Normalização (÷450) → Suavização (EMA α=0.2) → Valor [-1.0, +1.0] → vJoy
+→ Normalização (÷450) → Suavização (EMA α=0.2) → Valor [-1.0, +1.0]
+→ Controlador virtual (vJoy eixo Z ou Xbox 360 eixo LX)
 ```
+
+---
+
+## 🎮 Teste em Jogo Real (controle virtual)
+
+Com os drivers instalados (ver [README.md](README.md#-drivers-de-controle-virtual)), o valor normalizado é enviado a um **controle virtual** que os jogos reconhecem. O servidor detecta automaticamente o backend disponível: **vJoy** (DirectInput) ou **Xbox 360** (ViGEmBus/XInput).
+
+### 1. Validar o controle no Windows (antes do jogo)
+
+1. Instale o driver (vJoy ou ViGEmBus) e reinicie o PC se solicitado.
+2. Abra o **Game Controllers**: `Win+R` → `joy.cpl`.
+3. Inicie o servidor (UI ou console) e conecte o Android.
+4. Incline o celular: o eixo do controle virtual deve se mover (vJoy: eixo **Z**; Xbox 360: eixo **LX**).
+
+> Se o eixo não aparecer no vJoy, abra o **vJoy Config**, habilite o Device 1 e marque o eixo **Z**.
+
+### 2. Escolher um jogo compatível
+
+| Tipo de jogo | Exemplos | Observação |
+|--------------|----------|------------|
+| **DirectInput** (vJoy) | Euro Truck Simulator 2, American Truck Simulator, BeamNG.drive, Forza Horizon (modo DirectInput) | Jogos mais antigos ou com suporte a volante |
+| **XInput** (Xbox 360) | Forza Horizon 5, Need for Speed, GTA V, Rocket League, qualquer jogo com suporte a gamepad | Maioria dos jogos modernos |
+
+### 3. Configurar o jogo
+
+1. Abra o jogo com o servidor **já rodando** e o controle virtual ativo.
+2. Nas configurações de **controle/volante**, selecione o dispositivo virtual (ex: "vJoy Device" ou "Xbox 360 Controller").
+3. Mapeie o **eixo do volante** para a direção do veículo (vJoy: eixo Z; Xbox 360: eixo esquerdo).
+4. Ajuste a **sensibilidade** no app Android e a **deadzone** conforme a resposta do jogo.
+
+### 4. Testar
+
+1. No jogo, incline o celular para a esquerda/direita — o veículo deve virar proporcionalmente.
+2. Verifique no servidor (UI/console) se o valor normalizado acompanha o movimento.
+3. Se o volante "tremer" ou ficar instável, aumente a suavização no app ou reduza a sensibilidade.
+
+### Problemas comuns
+
+| Sintoma | Causa provável | Solução |
+|---------|----------------|---------|
+| Jogo não reconhece o controle | Driver não instalado / backend errado | Instalar vJoy ou ViGEmBus; verificar `joy.cpl` |
+| Eixo não se move no jogo | Eixo errado mapeado | Mapear eixo Z (vJoy) ou LX (Xbox 360) |
+| Volante instável/treme | Suavização baixa ou sensibilidade alta | Aumentar suavização, reduzir sensibilidade |
+| Jogo usa XInput mas só vJoy instalado | Backend incompatível | Instalar ViGEmBus (Xbox 360) |
+| Controle some ao fechar o servidor | Controle virtual é criado em runtime | Manter o servidor aberto durante o jogo |
 
 ---
 
 ## 🛡️ Estabilidade (watchdog)
 
-O servidor centraliza o volante (vJoy X = 0) após **500ms sem pacotes** e restaura quando os pacotes voltam.
+O servidor centraliza o volante (vJoy Z = 0) após **500ms sem pacotes** e restaura quando os pacotes voltam.
 
 ### Como testar
 
@@ -187,7 +233,7 @@ O servidor centraliza o volante (vJoy X = 0) após **500ms sem pacotes** e resta
 
 ```
 Conexão perdida! Nenhum pacote recebido por 558 ms
-vJoy X = 16383 (0.000 normalizado)   ← volante centralizado
+vJoy Z = 16383 (0.000 normalizado)   ← volante centralizado
 Conexão restaurada
 ```
 
@@ -211,6 +257,7 @@ Conexão restaurada
 | Descoberta de servidor (3 cenários) | 2026-09-13 | ✅ ALL PASS |
 | Steering (10 cenários) | — | ✅ ALL PASS |
 | Estabilidade/watchdog | — | ✅ PASS |
+| Controle virtual (vJoy/ViGEmBus) | — | ✅ Implementado (teste em jogo pendente) |
 
 ---
 

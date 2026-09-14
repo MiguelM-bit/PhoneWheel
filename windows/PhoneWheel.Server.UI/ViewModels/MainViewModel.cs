@@ -1,11 +1,14 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using System.Windows.Threading;
 using PhoneWheel.Server.Connection;
 using PhoneWheel.Server.Network;
 using PhoneWheel.Server.Services;
+using PhoneWheel.Server.UI.Configuration;
+using PhoneWheel.Server.VirtualController;
 
 namespace PhoneWheel.Server.UI.ViewModels;
 
@@ -17,10 +20,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private const int MaxLogLines = 300;
 
-    private readonly ServerEngine _engine;
     private readonly Dispatcher _dispatcher;
     private readonly RelayCommand _toggleCommand;
+    private readonly RelayCommand _testControllerCommand;
 
+    private ServerEngine? _engine;
     private bool _isRunning;
     private string _statusText = "Parado";
     private SolidColorBrush _statusBrush = Brushes.Gray;
@@ -32,32 +36,69 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _packetCountText = "0";
     private string _clientIpText = "—";
     private string _localIpText = "—";
+    private string _virtualControllerStatusText = "—";
+    private VirtualControllerType _selectedControllerType;
     private int _packetCount;
 
     public MainViewModel()
     {
         _dispatcher = Dispatcher.CurrentDispatcher;
 
-        _engine = new ServerEngine();
-        _engine.LogMessage += OnLogMessage;
-        _engine.SteeringProcessed += OnSteeringProcessed;
-        _engine.ConnectionStateChanged += OnConnectionStateChanged;
-        _engine.ClientConnected += OnClientConnected;
-        _engine.InvalidPacketReceived += OnInvalidPacketReceived;
-        _engine.ServerStarted += OnServerStarted;
-        _engine.ServerStopped += OnServerStopped;
+        var config = AppConfig.Load();
+        _selectedControllerType = config.ControllerType;
 
         _toggleCommand = new RelayCommand(Toggle);
+        _testControllerCommand = new RelayCommand(TestController);
 
         LogLines = new ObservableCollection<string>();
-        LocalIpText = _engine.LocalIp;
+        ControllerTypes = new ObservableCollection<VirtualControllerType>
+        {
+            VirtualControllerType.VJoy,
+            VirtualControllerType.Xbox360
+        };
+
+        LocalIpText = GetLocalIp();
     }
 
     /// <summary>Linhas do painel de log.</summary>
     public ObservableCollection<string> LogLines { get; }
 
+    /// <summary>Tipos de controle virtual disponíveis para seleção.</summary>
+    public ObservableCollection<VirtualControllerType> ControllerTypes { get; }
+
     /// <summary>Comando do botão Iniciar/Parar.</summary>
     public RelayCommand ToggleCommand => _toggleCommand;
+
+    /// <summary>Comando do botão Testar controle (abre joy.cpl).</summary>
+    public RelayCommand TestControllerCommand => _testControllerCommand;
+
+    /// <summary>Backend de controle virtual selecionado.</summary>
+    public VirtualControllerType SelectedControllerType
+    {
+        get => _selectedControllerType;
+        set
+        {
+            if (_selectedControllerType == value)
+            {
+                return;
+            }
+
+            _selectedControllerType = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ControllerTypeText));
+
+            // Persistir a seleção
+            new AppConfig { ControllerType = value }.Save();
+        }
+    }
+
+    /// <summary>Texto descritivo do backend selecionado.</summary>
+    public string ControllerTypeText => SelectedControllerType switch
+    {
+        VirtualControllerType.VJoy => "vJoy (DirectInput)",
+        VirtualControllerType.Xbox360 => "Xbox 360 (ViGEmBus)",
+        _ => SelectedControllerType.ToString()
+    };
 
     /// <summary>Indica se o servidor está em execução.</summary>
     public bool IsRunning
@@ -68,8 +109,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             _isRunning = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ToggleButtonText));
+            OnPropertyChanged(nameof(IsControllerSelectionEnabled));
         }
     }
+
+    /// <summary>Habilita a seleção de backend apenas quando parado.</summary>
+    public bool IsControllerSelectionEnabled => !IsRunning;
 
     /// <summary>Texto do botão Iniciar/Parar.</summary>
     public string ToggleButtonText => IsRunning ? "Parar" : "Iniciar";
@@ -92,6 +137,17 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         private set
         {
             _statusBrush = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Status do controle virtual (conectado/erro/desconectado).</summary>
+    public string VirtualControllerStatusText
+    {
+        get => _virtualControllerStatusText;
+        private set
+        {
+            _virtualControllerStatusText = value;
             OnPropertyChanged();
         }
     }
@@ -196,10 +252,27 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    private void TestController()
+    {
+        try
+        {
+            // joy.cpl lista todos os controles de jogo do Windows
+            // (inclui vJoy e o Xbox 360 virtual do ViGEmBus).
+            Process.Start(new ProcessStartInfo("joy.cpl") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AddLog($"[ERR] Falha ao abrir o painel de controles: {ex.Message}");
+        }
+    }
+
     private async Task StartAsync()
     {
         try
         {
+            _engine = new ServerEngine(controllerType: SelectedControllerType);
+            WireEngineEvents(_engine);
+
             await _engine.StartAsync();
         }
         catch (Exception ex)
@@ -212,12 +285,40 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         try
         {
-            await _engine.StopAsync();
+            if (_engine != null)
+            {
+                await _engine.StopAsync();
+                UnwireEngineEvents(_engine);
+                _engine.Dispose();
+                _engine = null;
+            }
         }
         catch (Exception ex)
         {
             AddLog($"[ERR] Falha ao parar: {ex.Message}");
         }
+    }
+
+    private void WireEngineEvents(ServerEngine engine)
+    {
+        engine.LogMessage += OnLogMessage;
+        engine.SteeringProcessed += OnSteeringProcessed;
+        engine.ConnectionStateChanged += OnConnectionStateChanged;
+        engine.ClientConnected += OnClientConnected;
+        engine.InvalidPacketReceived += OnInvalidPacketReceived;
+        engine.ServerStarted += OnServerStarted;
+        engine.ServerStopped += OnServerStopped;
+    }
+
+    private void UnwireEngineEvents(ServerEngine engine)
+    {
+        engine.LogMessage -= OnLogMessage;
+        engine.SteeringProcessed -= OnSteeringProcessed;
+        engine.ConnectionStateChanged -= OnConnectionStateChanged;
+        engine.ClientConnected -= OnClientConnected;
+        engine.InvalidPacketReceived -= OnInvalidPacketReceived;
+        engine.ServerStarted -= OnServerStarted;
+        engine.ServerStopped -= OnServerStopped;
     }
 
     private void OnServerStarted(object? sender, EventArgs e)
@@ -227,6 +328,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             IsRunning = true;
             StatusText = "Aguardando conexão...";
             StatusBrush = Brushes.Orange;
+            VirtualControllerStatusText = _engine?.VirtualControllerStatus.ToString() ?? "—";
         });
     }
 
@@ -241,6 +343,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             ClientIpText = "—";
             PacketCountText = "0";
             _packetCount = 0;
+            VirtualControllerStatusText = "—";
         });
     }
 
@@ -330,16 +433,26 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    private static string GetLocalIp()
+    {
+        try
+        {
+            return ServerDiscovery.GetLocalIPv4();
+        }
+        catch
+        {
+            return "—";
+        }
+    }
+
     public void Dispose()
     {
-        _engine.LogMessage -= OnLogMessage;
-        _engine.SteeringProcessed -= OnSteeringProcessed;
-        _engine.ConnectionStateChanged -= OnConnectionStateChanged;
-        _engine.ClientConnected -= OnClientConnected;
-        _engine.InvalidPacketReceived -= OnInvalidPacketReceived;
-        _engine.ServerStarted -= OnServerStarted;
-        _engine.ServerStopped -= OnServerStopped;
-        _engine.Dispose();
+        if (_engine != null)
+        {
+            UnwireEngineEvents(_engine);
+            _engine.Dispose();
+            _engine = null;
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

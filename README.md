@@ -1,6 +1,6 @@
 # PhoneWheel
 
-Monorepo que integra um **aplicativo Android** (Kotlin) a um **servidor Windows** (C#/.NET), permitindo usar o giroscópio do smartphone como volante para controlar dispositivos virtuais (vJoy).
+Monorepo que integra um **aplicativo Android** (Kotlin) a um **servidor Windows** (C#/.NET), permitindo usar o giroscópio do smartphone como volante para controlar dispositivos virtuais (vJoy / Xbox 360 via ViGEmBus) em jogos.
 
 ## 🏗️ Arquitetura
 
@@ -18,9 +18,8 @@ Monorepo que integra um **aplicativo Android** (Kotlin) a um **servidor Windows*
 │  Windows Server (C#/.NET)                                   │
 │  ┌──────────┐  ┌────────────────┐  ┌────────────────────┐   │
 │  │ UdpServer│→ │ SteeringPipeline│→ │ IVirtualController│   │
-│  │ (rede)   │  │ (calibra+norm.) │  │ (vJoy, Fase 1:    │   │
-│  └──────────┘  └────────────────┘  │  simulação)        │   │
-│                                    └────────────────────┘   │
+│  │ (rede)   │  │ (calibra+norm.) │  │ (vJoy ou ViGEmBus)│   │
+│  └──────────┘  └────────────────┘  └────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -31,6 +30,7 @@ Monorepo que integra um **aplicativo Android** (Kotlin) a um **servidor Windows*
 3. **Handshake**: o Android envia `connect` e só envia `steering` após receber `connect_ack`.
 4. **Descoberta de servidor**: o Android pode localizar o servidor na rede via broadcast UDP (`discover`/`discover_ack`) sem digitar o IP manualmente.
 5. **Watchdog**: o servidor detecta perda de conexão (500ms sem pacotes) e centraliza o volante automaticamente.
+6. **Controle virtual**: o valor normalizado é enviado ao backend selecionado — **vJoy** (joystick DirectInput) ou **Xbox 360** (ViGEmBus/XInput) — que os jogos reconhecem como um controle real.
 
 ## 📁 Estrutura do Monorepo
 
@@ -105,7 +105,7 @@ Abre a janela WPF com:
 - Botão **Iniciar/Parar** o servidor
 - **Volante giratório** que acompanha o ângulo de inclinação do celular
 - Painel com ângulo recebido, calibrado, normalizado, giroscópio e contagem de pacotes
-- Log em tempo real dos eventos do servidor
+- **Seletor de controlador virtual** (vJoy ou Xbox 360) e log em tempo real
 
 ### Console (alternativa)
 
@@ -125,6 +125,25 @@ O servidor escuta em `0.0.0.0:5005` e aguarda pacotes.
 
 Na interface visual, o volante gira conforme o celular é inclinado; no console, cada pacote `steering` é exibido com ângulo, valor normalizado e status do controlador virtual.
 
+## 🎮 Drivers de controle virtual
+
+Para o Windows reconhecer o volante como um controle real em jogos, instale **um** dos drivers abaixo (o app detecta automaticamente qual está disponível):
+
+### Opção A — vJoy (joystick DirectInput)
+
+1. Baixe o instalador em <https://sourceforge.net/projects/vjoystick/> (versão 2.2.1 ou superior).
+2. Instale e abra o **vJoy Config**.
+3. Em "Device 1", marque **Enable** e defina **Axis Z** como o eixo do volante (o servidor envia o valor normalizado no eixo Z).
+4. Aplique as configurações. O Windows passa a listar um "vJoy Device" em Dispositivos de Jogo.
+
+### Opção B — ViGEmBus (Xbox 360 / XInput)
+
+1. Baixe o driver em <https://github.com/ViGEm/ViGEmBus/releases> (arquivo `ViGEmBus_Setup_x64.exe`).
+2. Execute o instalador e reinicie o PC se solicitado.
+3. O servidor cria um controle **Xbox 360 virtual** com o eixo esquerdo (LX) mapeado para o volante — compatível com a maioria dos jogos modernos (XInput).
+
+> **Dica**: para validar antes de abrir o jogo, use o **Game Controllers** do Windows (`joy.cpl`) — o eixo deve se mover ao inclinar o celular. Veja o guia completo em [TESTING.md](TESTING.md).
+
 ## 📡 Protocolo
 
 A especificação completa dos pacotes (`steering`, `connect`, `connect_ack`, `discover`, `discover_ack`) está em [`protocol/protocol.md`](protocol/protocol.md).
@@ -143,7 +162,9 @@ Instruções de uso e teste — incluindo a **descoberta de servidor** — estã
 | Watchdog de conexão (500ms) | ✅ Implementado e testado |
 | Descoberta de servidor (discover/discover_ack) | ✅ Implementado e testado |
 | Interface visual WPF (volante, status, iniciar/parar) | ✅ Implementado e testado |
-| Controle virtual vJoy | ⚠️ Simulação (Fase 1) — integração real pendente |
+| Controle virtual **vJoy** (joystick DirectInput) | ✅ Integração real implementada |
+| Controle virtual **Xbox 360** (ViGEmBus/XInput) | ✅ Integração real implementada |
+| Teste em jogo real | ⚠️ Pendente (ver [TESTING.md](TESTING.md)) |
 | Testes unitários | ❌ Não existem |
 
 ## 🗓️ Roadmap
@@ -153,7 +174,9 @@ Instruções de uso e teste — incluindo a **descoberta de servidor** — estã
 - [x] Servidor Windows: listener UDP, pipeline, watchdog
 - [x] Descoberta de servidor via broadcast
 - [x] Interface visual WPF (volante, status, iniciar/parar)
-- [ ] Integração real com driver vJoy (Fase 2)
+- [x] Integração real com driver vJoy (Fase 2)
+- [x] Integração real com ViGEmBus (Xbox 360)
+- [ ] Teste em jogo real (validação final)
 - [ ] Testes unitários (Android e Windows)
 - [ ] Configuração via arquivo (calibração, deadzone, porta)
 - [ ] Múltiplos dispositivos Android simultâneos

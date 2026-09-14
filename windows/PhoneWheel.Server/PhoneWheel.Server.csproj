@@ -11,4 +11,9 @@
     <!-- vJoy será integrado em futuras iterações -->
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="CoreDX.vJoy.Wrapper" Version="1.2.3" />
+    <PackageReference Include="Nefarius.ViGEm.Client" Version="1.21.256" />
+  </ItemGroup>
+
 </Project>

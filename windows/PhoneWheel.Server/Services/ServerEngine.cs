@@ -61,12 +61,13 @@ public class ServerEngine : IDisposable
 {
     private readonly int _port;
     private readonly long _watchdogTimeoutMs;
-    private readonly CalibrationManager _calibrationManager;
-    private readonly SteeringProcessor _steeringProcessor;
-    private readonly VJoyController _vjoyController;
-    private readonly SteeringPipeline _steeringPipeline;
-    private readonly UdpServer _server;
-    private readonly ConcurrentDictionary<string, ClientInfo> _connectedClients = new();
+        private readonly VirtualControllerType _controllerType;
+        private readonly CalibrationManager _calibrationManager;
+        private readonly SteeringProcessor _steeringProcessor;
+        private readonly IVirtualController _virtualController;
+        private readonly SteeringPipeline _steeringPipeline;
+        private readonly UdpServer _server;
+        private readonly ConcurrentDictionary<string, ClientInfo> _connectedClients = new();
 
     private ConnectionWatchdog? _watchdog;
     private CancellationTokenSource? _watchdogCts;
@@ -102,16 +103,21 @@ public class ServerEngine : IDisposable
     /// </summary>
     /// <param name="port">Porta UDP na qual escutar (padrão: 5005).</param>
     /// <param name="watchdogTimeoutMs">Timeout de desconexão em ms (padrão: 500).</param>
-    public ServerEngine(int port = 5005, long watchdogTimeoutMs = 500)
-    {
-        _port = port;
-        _watchdogTimeoutMs = watchdogTimeoutMs;
+        /// <param name="controllerType">Backend de controle virtual (padrão: vJoy).</param>
+        public ServerEngine(
+            int port = 5005,
+            long watchdogTimeoutMs = 500,
+            VirtualControllerType controllerType = VirtualControllerType.VJoy)
+        {
+            _port = port;
+            _watchdogTimeoutMs = watchdogTimeoutMs;
+            _controllerType = controllerType;
 
-        _calibrationManager = new CalibrationManager();
-        _steeringProcessor = new SteeringProcessor(deadzone: 5.0, smoothingFactor: 0.2);
-        _vjoyController = new VJoyController(deviceId: 1);
-        _steeringPipeline = new SteeringPipeline(_calibrationManager, _steeringProcessor, _vjoyController);
-        _server = new UdpServer(_port);
+            _calibrationManager = new CalibrationManager();
+            _steeringProcessor = new SteeringProcessor(deadzone: 5.0, smoothingFactor: 0.2);
+            _virtualController = VirtualControllerFactory.Create(controllerType);
+            _steeringPipeline = new SteeringPipeline(_calibrationManager, _steeringProcessor, _virtualController);
+            _server = new UdpServer(_port);
 
         _server.ConnectPacketReceived += OnConnectPacketReceived;
         _server.DiscoverPacketReceived += OnDiscoverPacketReceived;
@@ -122,8 +128,14 @@ public class ServerEngine : IDisposable
     /// <summary>Indica se o servidor está em execução.</summary>
     public bool IsRunning => _isRunning;
 
-    /// <summary>Status atual da conexão (via watchdog).</summary>
-    public ConnectionStatus ConnectionStatus => _watchdog?.Status ?? ConnectionStatus.Disconnected;
+        /// <summary>Tipo de backend de controle virtual em uso.</summary>
+            public VirtualControllerType ControllerType => _controllerType;
+
+            /// <summary>Status do controle virtual (conectado/erro/desconectado).</summary>
+            public VirtualControllerStatus VirtualControllerStatus => _virtualController.Status;
+
+            /// <summary>Status atual da conexão (via watchdog).</summary>
+            public ConnectionStatus ConnectionStatus => _watchdog?.Status ?? ConnectionStatus.Disconnected;
 
     /// <summary>Snapshot dos clientes conectados (IP → informações).</summary>
     public IReadOnlyCollection<KeyValuePair<string, ClientInfo>> ConnectedClients => _connectedClients.ToArray();
@@ -146,7 +158,7 @@ public class ServerEngine : IDisposable
         _isRunning = true;
 
         // Watchdog (recriado a cada start para não reter estado anterior)
-        _watchdog = new ConnectionWatchdog(_vjoyController, _watchdogTimeoutMs);
+                _watchdog = new ConnectionWatchdog(_virtualController, _watchdogTimeoutMs);
         _watchdog.ConnectionLost += OnWatchdogConnectionLost;
         _watchdog.ConnectionRestored += OnWatchdogConnectionRestored;
         _watchdogCts = new CancellationTokenSource();
@@ -160,17 +172,17 @@ public class ServerEngine : IDisposable
         Log(EngineLogLevel.Info, "Timeout de desconexão: {0} ms", _watchdogTimeoutMs);
         Log(EngineLogLevel.Info, "");
 
-        // Conectar ao vJoy
+        // Conectar ao controle virtual
         try
         {
-            _vjoyController.Connect();
-            Log(EngineLogLevel.Success, "Controlador virtual conectado (Status: {0})", _vjoyController.Status);
+                    _virtualController.Connect();
+                    Log(EngineLogLevel.Success, "Controle virtual conectado ({0}, Status: {1})", _controllerType, _virtualController.Status);
             Log(EngineLogLevel.Info, "");
         }
         catch (VirtualControllerException ex)
         {
-            Log(EngineLogLevel.Warning, "Não foi possível conectar ao vJoy: {0}", ex.Message);
-            Log(EngineLogLevel.Warning, "O servidor continuará funcionando, mas sem enviar dados ao vJoy.");
+                    Log(EngineLogLevel.Warning, "Não foi possível conectar ao controle virtual ({0}): {1}", _controllerType, ex.Message);
+                    Log(EngineLogLevel.Warning, "O servidor continuará funcionando, mas sem enviar dados ao controle virtual.");
             Log(EngineLogLevel.Info, "");
         }
 
@@ -243,10 +255,10 @@ public class ServerEngine : IDisposable
             _watchdog = null;
         }
 
-        // Desconectar o vJoy
+        // Desconectar o controle virtual
         try
         {
-            _vjoyController.Disconnect();
+                    _virtualController.Disconnect();
         }
         catch
         {
@@ -275,7 +287,7 @@ public class ServerEngine : IDisposable
         StopAsync().GetAwaiter().GetResult();
 
         _server.Dispose();
-        _vjoyController.Dispose();
+                _virtualController.Dispose();
     }
 
     /// <summary>

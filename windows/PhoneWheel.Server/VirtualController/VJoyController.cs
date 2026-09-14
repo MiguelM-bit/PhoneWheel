@@ -1,4 +1,5 @@
 using System;
+using CoreDX.vJoy.Wrapper;
 
 namespace PhoneWheel.Server.VirtualController;
 
@@ -8,7 +9,7 @@ namespace PhoneWheel.Server.VirtualController;
 /// Responsabilidades:
 /// - Conectar ao dispositivo virtual vJoy
 /// - Assumir o dispositivo
-/// - Enviar valores de direção (eixo X)
+/// - Enviar valores de direção (eixo Z)
 /// - Liberar o dispositivo ao desconectar
 ///
 /// Esta classe é específica da implementação vJoy e não deve ser
@@ -18,10 +19,8 @@ namespace PhoneWheel.Server.VirtualController;
 /// - vJoy deve estar instalado no sistema
 /// - Pelo menos um dispositivo virtual deve estar criado
 /// - Este código assume o dispositivo 1 por padrão
-///
-/// FASE 1 (ATUAL): Implementação simplificada que simula vJoy
-/// Permite testar a arquitetura sem dependência de hardware/driver.
-/// A integração real com vJoy será feita quando a API correta estiver disponível.
+/// - Sem o driver instalado, Connect() lança VirtualControllerException
+///   com uma mensagem clara; o servidor continua funcionando sem vJoy.
 /// </summary>
 public class VJoyController : IVirtualController
 {
@@ -30,8 +29,15 @@ public class VJoyController : IVirtualController
     private bool _disposed;
     private VirtualControllerStatus _status;
     private double _lastSteeringValue = double.NaN;
-    private const int VJoyAxisMin = 0;
-    private const int VJoyAxisMax = 32767; // Valor típico para vJoy
+
+    private VJoyControllerManager? _manager;
+    private IVJoyController? _controller;
+
+    // Valores do enum VjdStat do SDK vJoy (retornado como object pelo wrapper).
+    private const int VjdStatOwn = 0;
+    private const int VjdStatFree = 1;
+    private const int VjdStatBusy = 2;
+    private const int VjdStatMiss = 3;
 
     /// <summary>
     /// Inicializa a implementação vJoy.
@@ -63,20 +69,61 @@ public class VJoyController : IVirtualController
 
         try
         {
-            // Simulação de verificação de vJoy
-            // Em produção, isso verificaria:
-            // - Se vJoy está instalado
-            // - Versão do driver
-            // - Status do dispositivo
-            // - Capacidade de adquirir o dispositivo
-            
-            Console.WriteLine($"[vJoy] Conectando ao dispositivo {_deviceId}...");
-            
-            // Simular sucesso
+            _manager = VJoyControllerManager.GetManager();
+
+            if (!VJoyControllerManager.IsDriverLoaded)
+            {
+                throw new VirtualControllerException(
+                    "Driver vJoy não está instalado. Instale o vJoy " +
+                    "(https://sourceforge.net/projects/vjoystick/) e crie um dispositivo virtual.");
+            }
+
+            if (!_manager.IsVJoyEnabled)
+            {
+                throw new VirtualControllerException(
+                    "vJoy está instalado, mas nenhum dispositivo está habilitado. " +
+                    "Abra o 'Configure vJoy' e habilite pelo menos um dispositivo.");
+            }
+
+            var status = _manager.GetVJDStatus(_deviceId);
+            var statusValue = status != null ? Convert.ToInt32(status) : VjdStatMiss;
+
+            if (statusValue == VjdStatMiss)
+            {
+                throw new VirtualControllerException(
+                    $"Dispositivo vJoy {_deviceId} não existe. " +
+                    "Crie-o no 'Configure vJoy'.");
+            }
+
+            if (statusValue == VjdStatBusy)
+            {
+                throw new VirtualControllerException(
+                    $"Dispositivo vJoy {_deviceId} está em uso por outro aplicativo.");
+            }
+
+            _controller = _manager.AcquireController(_deviceId);
+            if (_controller == null)
+            {
+                throw new VirtualControllerException(
+                    $"Falha ao adquirir o dispositivo vJoy {_deviceId}.");
+            }
+
+            if (!_controller.HasAxisZ)
+            {
+                _manager.RelinquishController(_controller);
+                _controller = null;
+                throw new VirtualControllerException(
+                                $"Dispositivo vJoy {_deviceId} não possui eixo Z. " +
+                                "Habilite o eixo Z no 'Configure vJoy'.");
+            }
+
             _connected = true;
             _status = VirtualControllerStatus.Connected;
-            
-            Console.WriteLine($"[vJoy] Dispositivo {_deviceId} conectado com sucesso.");
+        }
+        catch (VirtualControllerException)
+        {
+            _status = VirtualControllerStatus.Error;
+            throw;
         }
         catch (Exception ex)
         {
@@ -117,23 +164,27 @@ public class VJoyController : IVirtualController
 
         try
         {
-            // Mapear [-1.0, 1.0] para [VJoyAxisMin, VJoyAxisMax]
-            // -1.0 → VJoyAxisMin
-            //  0.0 → (VJoyAxisMin + VJoyAxisMax) / 2
-            // +1.0 → VJoyAxisMax
-            var center = (VJoyAxisMin + VJoyAxisMax) / 2.0;
-            var range = (VJoyAxisMax - VJoyAxisMin) / 2.0;
-            var mappedValue = (int)(center + (clampedValue * range));
+            // Mapear [-1.0, 1.0] para [0, max]
+            // -1.0 → 0
+            //  0.0 → max / 2
+            // +1.0 → max
+            var max = _controller?.AxisMaxValue ?? 32767;
+            var center = max / 2.0;
+            var range = max / 2.0;
+            var mappedValue = (int)Math.Clamp(center + (clampedValue * range), 0, max);
 
-            // Garantir que está dentro dos limites
-            mappedValue = (int)Math.Clamp(mappedValue, VJoyAxisMin, VJoyAxisMax);
-
-            // Simular envio ao vJoy
-            Console.WriteLine(
-                $"[vJoy] Dispositivo {_deviceId} - Eixo X: {mappedValue} " +
-                $"(valor normalizado: {clampedValue:F3})");
+            if (_controller == null || !_controller.SetAxisZ(mappedValue))
+            {
+                _status = VirtualControllerStatus.Error;
+                throw new VirtualControllerException(
+                                $"Falha ao enviar valor ao eixo Z do vJoy {_deviceId}.");
+            }
 
             _lastSteeringValue = clampedValue;
+        }
+        catch (VirtualControllerException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -156,9 +207,33 @@ public class VJoyController : IVirtualController
                 "Não conectado ao dispositivo vJoy. Chame Connect() primeiro.");
         }
 
-        // Implementação futura
-        throw new NotImplementedException(
-            "Controle de botões será implementado em uma fase posterior.");
+        try
+        {
+            if (_controller == null)
+            {
+                return;
+            }
+
+            var ok = pressed
+                ? _controller.PressButton((uint)button)
+                : _controller.ReleaseButton((uint)button);
+
+            if (!ok)
+            {
+                throw new VirtualControllerException(
+                    $"Falha ao definir botão {button} do vJoy {_deviceId}.");
+            }
+        }
+        catch (VirtualControllerException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _status = VirtualControllerStatus.Error;
+            throw new VirtualControllerException(
+                $"Erro ao definir botão: {ex.Message}", ex);
+        }
     }
 
     public void Disconnect()
@@ -170,13 +245,17 @@ public class VJoyController : IVirtualController
 
         try
         {
-            Console.WriteLine($"[vJoy] Desconectando do dispositivo {_deviceId}...");
-            
+            if (_controller != null)
+            {
+                _controller.Reset();
+                _manager?.RelinquishController(_controller);
+            }
+
+            _controller = null;
+            _manager = null;
             _connected = false;
             _status = VirtualControllerStatus.Disconnected;
             _lastSteeringValue = double.NaN;
-            
-            Console.WriteLine($"[vJoy] Dispositivo {_deviceId} desconectado.");
         }
         catch (Exception ex)
         {

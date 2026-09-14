@@ -9,7 +9,7 @@ namespace PhoneWheel.Server.VirtualController;
 ///
 /// Responsabilidades:
 /// - Conectar/desconectar do dispositivo virtual
-/// - Enviar valores de direção (eixo X)
+/// - Enviar valores de direção (eixo Z)
 /// - Controlar botões (futuro)
 /// - Manter o ciclo de vida do dispositivo
 ///

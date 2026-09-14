@@ -1,11 +1,15 @@
 ﻿using PhoneWheel.Server.Services;
+using PhoneWheel.Server.VirtualController;
 
 const int UDP_PORT = 5005;
 const long WATCHDOG_TIMEOUT_MS = 500; // Timeout de conexão: 500 ms
 
+// Tipo de controle virtual: "vjoy" (padrão) ou "xbox360" (ViGEmBus)
+var controllerType = ParseControllerType(args.Length > 0 ? args[0] : "vjoy");
+
 ServerLogger.PrintBanner();
 
-using var engine = new ServerEngine(UDP_PORT, WATCHDOG_TIMEOUT_MS);
+using var engine = new ServerEngine(UDP_PORT, WATCHDOG_TIMEOUT_MS, controllerType);
 
 // Encaminhar logs do motor para o console
 engine.LogMessage += (_, entry) =>
@@ -74,4 +78,14 @@ catch (Exception ex)
 {
     ServerLogger.Error("{0}", ex.Message);
     Environment.Exit(1);
+}
+
+static VirtualControllerType ParseControllerType(string value)
+{
+    return value.Trim().ToLowerInvariant() switch
+    {
+        "vjoy" => VirtualControllerType.VJoy,
+        "xbox360" or "vigem" or "xbox" => VirtualControllerType.Xbox360,
+        _ => VirtualControllerType.VJoy
+    };
 }

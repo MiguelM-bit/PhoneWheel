@@ -12,6 +12,7 @@
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -34,8 +35,34 @@
                        Foreground="#9E9E9E" VerticalAlignment="Center"/>
         </Grid>
 
+        <!-- Controle virtual: seleção de backend + teste -->
+        <Border Grid.Row="1" Margin="0,0,0,12" Background="#141414"
+                BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Padding="12,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="Controle virtual:" Foreground="#9E9E9E"
+                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <ComboBox Grid.Column="1" Width="200"
+                          ItemsSource="{Binding ControllerTypes}"
+                          SelectedItem="{Binding SelectedControllerType}"
+                          IsEnabled="{Binding IsControllerSelectionEnabled}"
+                          VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="{Binding ControllerTypeText}"
+                           Foreground="#4FC3F7" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <Button Grid.Column="4" Content="Testar controle" Command="{Binding TestControllerCommand}"
+                        Width="130" Height="30" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
         <!-- Corpo: volante + valores -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -106,12 +133,12 @@
         </Grid>
 
         <!-- Botão Iniciar/Parar -->
-        <Button Grid.Row="2" Content="{Binding ToggleButtonText}" Command="{Binding ToggleCommand}"
+        <Button Grid.Row="3" Content="{Binding ToggleButtonText}" Command="{Binding ToggleCommand}"
                 Width="180" Height="42" HorizontalAlignment="Left" Margin="0,8,0,0"
                 FontSize="15" FontWeight="SemiBold"/>
 
         <!-- Painel de log -->
-        <Border Grid.Row="3" Margin="0,12,0,0" Background="#141414"
+        <Border Grid.Row="4" Margin="0,12,0,0" Background="#141414"
                 BorderBrush="#333333" BorderThickness="1" CornerRadius="4">
             <ListBox x:Name="LogList" ItemsSource="{Binding LogLines}"
                      Background="Transparent" BorderThickness="0"

@@ -25,16 +25,21 @@
 
     <!-- Controller Screen -->
         <string name="controller_title">Controle</string>
-        <string name="controller_placeholder">Controles virtuais em breve</string>
+
+            <!-- Modo Volante -->
+            <string name="wheel_mode">Modo Volante</string>
+            <string name="wheel_mode_on">Volante ativo</string>
+            <string name="wheel_mode_off">Volante desativado</string>
+            <string name="wheel_mode_no_gyro">Giroscópio não disponível</string>
 
         <!-- Labels -->
         <string name="label_angle">Ângulo</string>
-    <string name="label_gyro">Gyro</string>
-    <string name="label_axis">Eixo</string>
-    <string name="label_sensitivity">Sensibilidade</string>
-    <string name="label_range">Range</string>
-    <string name="label_connection">Conexão UDP</string>
-    <string name="label_controls">Controles</string>
+        <string name="label_gyro">Gyro</string>
+        <string name="label_axis">Eixo</string>
+        <string name="label_sensitivity">Sensibilidade</string>
+        <string name="label_range">Range</string>
+        <string name="label_connection">Conexão UDP</string>
+        <string name="label_controls">Controles</string>
         <string name="label_gamepad">Gamepad (teste)</string>
         <string name="gamepad_hint">Toque e segure para pressionar</string>
 
@@ -45,6 +50,8 @@
         <string name="button_y">Y</string>
         <string name="button_lb">LB</string>
         <string name="button_rb">RB</string>
+        <string name="button_ls">LS</string>
+        <string name="button_rs">RS</string>
         <string name="button_lt">LT</string>
         <string name="button_rt">RT</string>
         <string name="button_back">Back</string>

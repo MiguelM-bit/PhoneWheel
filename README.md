@@ -145,7 +145,8 @@ Para o Windows reconhecer o volante como um controle real em jogos, instale **um
 1. Baixe o instalador em <https://sourceforge.net/projects/vjoystick/> (versão 2.2.1 ou superior).
 2. Instale e abra o **vJoy Config**.
 3. Em "Device 1", marque **Enable** e defina **Axis Z** como o eixo do volante (o servidor envia o valor normalizado no eixo Z).
-4. Aplique as configurações. O Windows passa a listar um "vJoy Device" em Dispositivos de Jogo.
+4. Para o **gamepad completo** (botões + D-pad + analógicos), defina **Buttons ≥ 14** e habilite os eixos **X, Y, Rx, Ry** (além do Z).
+5. Aplique as configurações. O Windows passa a listar um "vJoy Device" em Dispositivos de Jogo.
 
 ### Opção B — ViGEmBus (Xbox 360 / XInput)
 
@@ -176,7 +177,8 @@ Instruções de uso e teste — incluindo a **descoberta de servidor** — estã
 | Controle virtual **vJoy** (joystick DirectInput) | ✅ Integração real implementada |
 | Controle virtual **Xbox 360** (ViGEmBus/XInput) | ✅ Integração real implementada |
 | Botões (pacote `button`, Android → Windows) | ✅ Implementado e testado |
-| Eixos analógicos (pacote `axis`, Android → Windows) | ✅ Implementado (infraestrutura) |
+| Eixos analógicos (pacote `axis`, Android → Windows) | ✅ Implementado |
+| Controller Screen (gamepad virtual completo em paisagem) | ✅ Implementado |
 | Liberação de botões na perda de conexão | ✅ Implementado |
 | Teste de controle (controllertest.io na UI) | ✅ Implementado |
 | Teste em jogo real | ⚠️ Pendente (ver [TESTING.md](TESTING.md)) |
@@ -194,8 +196,10 @@ Instruções de uso e teste — incluindo a **descoberta de servidor** — estã
 - [x] Botões touch (Android) → controle virtual (Windows)
 - [x] Liberação de botões na perda de conexão
 - [x] Testador de controle embutido (controllertest.io)
+- [x] Controller Screen (gamepad virtual completo em paisagem)
+- [x] Testes unitários (Android: controles virtuais, filtro de eixos)
 - [ ] Teste em jogo real (validação final)
-- [ ] Testes unitários (Android e Windows)
+- [ ] Testes unitários (Windows)
 - [ ] Configuração via arquivo (calibração, deadzone, porta)
 - [ ] Múltiplos dispositivos Android simultâneos
 - [ ] Logging persistente e métricas (latência, taxa de pacotes)

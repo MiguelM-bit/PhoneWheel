@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CoreDX.vJoy.Wrapper;
 using PhoneWheel.Server.Models;
 
@@ -34,6 +35,7 @@ public class VJoyController : IVirtualController
 
     private VJoyControllerManager? _manager;
     private IVJoyController? _controller;
+        private readonly List<string> _configurationWarnings = new();
 
     // Valores do enum VjdStat do SDK vJoy (retornado como object pelo wrapper).
     private const int VjdStatOwn = 0;
@@ -65,6 +67,17 @@ public class VJoyController : IVirtualController
                 }
             }
         }
+
+            public IReadOnlyList<string> ConfigurationWarnings
+            {
+                get
+                {
+                    lock (_lock)
+                    {
+                        return _configurationWarnings.ToArray();
+                    }
+                }
+            }
 
         public void Connect()
         {
@@ -121,17 +134,40 @@ public class VJoyController : IVirtualController
                             $"Falha ao adquirir o dispositivo vJoy {_deviceId}.");
                     }
 
-                    if (!_controller.HasAxisZ)
-                    {
-                        _manager.RelinquishController(_controller);
-                        _controller = null;
-                        throw new VirtualControllerException(
-                                        $"Dispositivo vJoy {_deviceId} não possui eixo Z. " +
-                                        "Habilite o eixo Z no 'Configure vJoy'.");
-                    }
+                    // O gamepad virtual usa 14 botões (A/B/X/Y/LB/RB/LS/RS/Back/Start
+                                        // + D-pad 4 direções) e os eixos X/Y/Rx/Ry. A configuração é
+                                        // validada de forma NÃO-bloqueante: o controle conecta mesmo
+                                        // incompleto, e botões/eixos existentes funcionam. Avisos são
+                                        // expostos via ConfigurationWarnings para o servidor logar.
+                                        _configurationWarnings.Clear();
 
-                    _connected = true;
-                    _status = VirtualControllerStatus.Connected;
+                                        var buttonCount = _controller.ButtonCount;
+                                        if (buttonCount < 14)
+                                        {
+                                            _configurationWarnings.Add(
+                                                $"Dispositivo vJoy {_deviceId} possui apenas {buttonCount} botões, " +
+                                                "mas o gamepad precisa de 14 (A/B/X/Y/LB/RB/LS/RS/Back/Start + D-pad). " +
+                                                "No 'Configure vJoy', defina o número de botões para pelo menos 14.");
+                                        }
+
+                                        if (!_controller.HasAxisZ)
+                                        {
+                                            _configurationWarnings.Add(
+                                                $"Dispositivo vJoy {_deviceId} não possui eixo Z. " +
+                                                "O volante (steering) não funcionará. Habilite o eixo Z no 'Configure vJoy'.");
+                                        }
+
+                                        if (!_controller.HasAxisX || !_controller.HasAxisY ||
+                                            !_controller.HasAxisRx || !_controller.HasAxisRy)
+                                        {
+                                            _configurationWarnings.Add(
+                                                $"Dispositivo vJoy {_deviceId} não possui todos os eixos do gamepad " +
+                                                "(X, Y, Rx, Ry). Os analógicos podem não funcionar. " +
+                                                "Habilite-os no 'Configure vJoy'.");
+                                        }
+
+                                        _connected = true;
+                                        _status = VirtualControllerStatus.Connected;
                 }
                 catch (VirtualControllerException)
                 {
@@ -233,16 +269,20 @@ public class VJoyController : IVirtualController
                         return;
                     }
 
-                    var ok = pressed
-                        ? _controller.PressButton((uint)button)
-                        : _controller.ReleaseButton((uint)button);
+                                    // O protocolo usa IDs 0-based (A=0, B=1, ...), mas o SDK
+                                    // vJoy é 1-based (PressButton(1) = primeiro botão).
+                                    var vjoyButton = (uint)(button + 1);
 
-                    if (!ok)
-                    {
-                        throw new VirtualControllerException(
-                            $"Falha ao definir botão {button} do vJoy {_deviceId}.");
-                    }
-                }
+                                    var ok = pressed
+                                        ? _controller.PressButton(vjoyButton)
+                                        : _controller.ReleaseButton(vjoyButton);
+
+                                    if (!ok)
+                                    {
+                                        throw new VirtualControllerException(
+                                            $"Falha ao definir botão {button} (vJoy {vjoyButton}) do vJoy {_deviceId}.");
+                                    }
+                                }
                 catch (VirtualControllerException)
                 {
                     throw;

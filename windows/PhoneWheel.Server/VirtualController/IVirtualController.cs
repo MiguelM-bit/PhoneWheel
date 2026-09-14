@@ -27,6 +27,12 @@ public interface IVirtualController : IDisposable
     /// </summary>
     VirtualControllerStatus Status { get; }
 
+        /// <summary>
+        /// Avisos de configuração do dispositivo virtual (ex.: botões ou eixos
+        /// insuficientes para o gamepad). Vazio quando a configuração está completa.
+        /// </summary>
+        IReadOnlyList<string> ConfigurationWarnings { get; }
+
     /// <summary>
     /// Conecta ao dispositivo virtual.
     ///

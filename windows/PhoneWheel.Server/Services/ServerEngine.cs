@@ -180,8 +180,14 @@ public class ServerEngine : IDisposable
         {
                     _virtualController.Connect();
                     Log(EngineLogLevel.Success, "Controle virtual conectado ({0}, Status: {1})", _controllerType, _virtualController.Status);
-            Log(EngineLogLevel.Info, "");
-        }
+
+                            foreach (var warning in _virtualController.ConfigurationWarnings)
+                            {
+                                Log(EngineLogLevel.Warning, "Configuração do controle virtual: {0}", warning);
+                            }
+
+                    Log(EngineLogLevel.Info, "");
+                }
         catch (VirtualControllerException ex)
         {
                     Log(EngineLogLevel.Warning, "Não foi possível conectar ao controle virtual ({0}): {1}", _controllerType, ex.Message);

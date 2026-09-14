@@ -216,6 +216,17 @@ Com os drivers instalados (ver [README.md](README.md#-drivers-de-controle-virtua
 
 > Se o eixo não aparecer no vJoy, abra o **vJoy Config**, habilite o Device 1 e marque o eixo **Z**.
 
+### 1.1 Configuração do vJoy (obrigatória para o gamepad)
+
+O backend padrão é o **vJoy**. Para o gamepad completo (botões + D-pad + analógicos) funcionar, o dispositivo vJoy precisa ser configurado no **Configure vJoy** (iniciado pelo atalho "Configure vJoy" do menu Iniciar):
+
+1. Selecione o **Device 1**.
+2. Em **Buttons**, defina o número de botões para **pelo menos 14** (o padrão é 4).
+3. Em **Axes**, habilite **X**, **Y**, **Rx** e **Ry** (além do **Z** usado pelo volante).
+4. Clique em **Apply**.
+
+O servidor valida essa configuração ao conectar e mostra **avisos** no log se algo estiver faltando (o controle conecta mesmo assim — botões/eixos existentes funcionam). Alternativa: selecione **Xbox 360 (ViGEmBus)** no ComboBox da UI — nesse caso nenhuma configuração extra é necessária.
+
 ### 2. Escolher um jogo compatível
 
 | Tipo de jogo | Exemplos | Observação |
@@ -241,6 +252,9 @@ Com os drivers instalados (ver [README.md](README.md#-drivers-de-controle-virtua
 | Sintoma | Causa provável | Solução |
 |---------|----------------|---------|
 | Jogo não reconhece o controle | Driver não instalado / backend errado | Instalar vJoy ou ViGEmBus; verificar `joy.cpl` |
+| Botões deslocados no testador (B acende como botão 1, etc.) | Bug de indexação vJoy (corrigido) | Recompilar/atualizar o servidor |
+| D-pad não responde (vJoy) | Dispositivo com menos de 14 botões | Configurar 14+ botões no Configure vJoy |
+| Analógicos não respondem (vJoy) | Eixos Rx/Ry não habilitados | Habilitar X, Y, Rx, Ry no Configure vJoy |
 | Eixo não se move no jogo | Eixo errado mapeado | Mapear eixo Z (vJoy) ou LX (Xbox 360) |
 | Volante instável/treme | Suavização baixa ou sensibilidade alta | Aumentar suavização, reduzir sensibilidade |
 | Jogo usa XInput mas só vJoy instalado | Backend incompatível | Instalar ViGEmBus (Xbox 360) |
@@ -263,20 +277,22 @@ O servidor Windows processa eventos de botão (`type: "button"`) e os encaminha 
 
 | Botão | ID | vJoy | Xbox 360 (ViGEmBus) |
 |-------|----|------|---------------------|
-| A | 0 | Botão 0 | A |
-| B | 1 | Botão 1 | B |
-| X | 2 | Botão 2 | X |
-| Y | 3 | Botão 3 | Y |
-| LB | 4 | Botão 4 | LB |
-| RB | 5 | Botão 5 | RB |
-| LS | 6 | Botão 6 | LS |
-| RS | 7 | Botão 7 | RS |
-| Back | 8 | Botão 8 | Back |
-| Start | 9 | Botão 9 | Start |
-| DPad Up | 10 | Botão 10 | DPad Up |
-| DPad Down | 11 | Botão 11 | DPad Down |
-| DPad Left | 12 | Botão 12 | DPad Left |
-| DPad Right | 13 | Botão 13 | DPad Right |
+| A | 0 | Botão 1 | A |
+| B | 1 | Botão 2 | B |
+| X | 2 | Botão 3 | X |
+| Y | 3 | Botão 4 | Y |
+| LB | 4 | Botão 5 | LB |
+| RB | 5 | Botão 6 | RB |
+| LS | 6 | Botão 7 | LS |
+| RS | 7 | Botão 8 | RS |
+| Back | 8 | Botão 9 | Back |
+| Start | 9 | Botão 10 | Start |
+| DPad Up | 10 | Botão 11 | DPad Up |
+| DPad Down | 11 | Botão 12 | DPad Down |
+| DPad Left | 12 | Botão 13 | DPad Left |
+| DPad Right | 13 | Botão 14 | DPad Right |
+
+> **Importante (vJoy)**: o SDK vJoy é **1-based** — o ID do protocolo (0-based) é convertido para `ID + 1` no servidor. O dispositivo vJoy precisa ter **pelo menos 14 botões** habilitados no **Configure vJoy** (o padrão é 4). Sem isso, os botões 5+ (RB, LS, RS, Back, Start e todo o D-pad) não respondem.
 
 > **Nota**: pressionar um botão já pressionado (ou liberar um já liberado) não gera pacote duplicado. Ao desconectar, todos os botões são liberados automaticamente — no Android via `releaseAll` e no servidor via watchdog (libera todos os botões pressionados no controle virtual).
 
@@ -322,7 +338,7 @@ O mapeamento completo (ID → vJoy → Xbox 360) está na tabela da seção **"C
 
 ## 🕹️ Eixos Analógicos (pacote `axis`)
 
-O servidor Windows processa eventos de eixo analógico (`type: "axis"`) e os encaminha ao controle virtual. O app Android agora possui os **componentes de controle virtual** (`VirtualAnalogStick`, `VirtualButton`, `VirtualDPad`) prontos para envio desses eventos pela conexão UDP existente — a Controller Screen que os utiliza ainda não foi construída.
+O servidor Windows processa eventos de eixo analógico (`type: "axis"`) e os encaminha ao controle virtual. O app Android possui a **Controller Screen** completa (paisagem) com os componentes de controle virtual (`VirtualAnalogStick`, `VirtualButton`, `VirtualDPad`) enviando esses eventos pela conexão UDP existente.
 
 ### Componentes de controle virtual (Android)
 

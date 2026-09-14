@@ -35,8 +35,14 @@ class VirtualAnalogStick @JvmOverloads constructor(
     var stickId: StickId = StickId.LEFT
     var axisSender: AxisSender? = null
 
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val model = AnalogStickModel()
+        /**
+             * Modo Volante: quando ativado, o toque não altera o valor (o giroscópio
+             * controla o eixo X via [setWheelValue]) e o visual fica destacado.
+             */
+            var wheelMode: Boolean = false
+
+            private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            private val model = AnalogStickModel()
 
     private var activePointerId = MotionEvent.INVALID_POINTER_ID
 
@@ -66,8 +72,22 @@ class VirtualAnalogStick @JvmOverloads constructor(
         model.radius = baseRadius - knobRadius
     }
 
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
+    /**
+         * Define o valor do volante (Modo Volante): atualiza apenas o eixo X
+         * normalizado em [-1.0, +1.0] e centraliza Y. Não envia eixos pela rede.
+         */
+        fun setWheelValue(normalizedX: Float) {
+            val clamped = normalizedX.coerceIn(-1f, 1f)
+            if (model.update(clamped * model.radius, 0f)) {
+                invalidate()
+            }
+        }
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            // No Modo Volante o toque não altera o valor: o giroscópio controla o volante.
+            if (wheelMode) return false
+
+            when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 if (activePointerId == MotionEvent.INVALID_POINTER_ID) {
                     activePointerId = event.getPointerId(0)
@@ -150,10 +170,10 @@ class VirtualAnalogStick @JvmOverloads constructor(
         paint.color = baseColor
         canvas.drawCircle(cx, cy, baseRadius, paint)
 
-        // Borda da base
+        // Borda da base (vermelha no Modo Volante)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 2f
-        paint.color = baseBorderColor
+                paint.color = if (wheelMode) knobActiveColor else baseBorderColor
         canvas.drawCircle(cx, cy, baseRadius, paint)
 
         // Guias cruzadas
@@ -169,7 +189,7 @@ class VirtualAnalogStick @JvmOverloads constructor(
         val active = activePointerId != MotionEvent.INVALID_POINTER_ID
 
         paint.style = Paint.Style.FILL
-        paint.color = if (active) knobActiveColor else knobColor
+                paint.color = if (active) knobActiveColor else if (wheelMode) knobActiveColor else knobColor
         canvas.drawCircle(knobX, knobY, knobRadius, paint)
 
         paint.style = Paint.Style.STROKE

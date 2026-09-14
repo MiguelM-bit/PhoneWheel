@@ -55,7 +55,9 @@ public class ViGEmController : IVirtualController
             }
         }
 
-        public void Connect()
+            public IReadOnlyList<string> ConfigurationWarnings => Array.Empty<string>();
+
+            public void Connect()
         {
             lock (_lock)
             {

@@ -2,6 +2,7 @@ package com.phonewheel.network
 
 import com.phonewheel.model.SteeringPacket
 import com.phonewheel.model.ConnectAckPacket
+import com.phonewheel.model.HeartbeatPacket
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,7 +52,7 @@ class UdpClient(
             remoteAddress = InetAddress.getByName(host)
             remotePort = port
             socket = DatagramSocket().apply {
-                soTimeout = 5000 // 5 segundos para receber resposta
+                soTimeout = 1000 // 1 segundo para timeout de leitura (connect_ack e heartbeat)
             }
             lastError = null
             _connectionState.value = ConnectionState.CONNECTED
@@ -137,6 +138,26 @@ class UdpClient(
             null
         } catch (e: IOException) {
             lastError = e.message ?: "Erro ao receber resposta"
+            null
+        }
+    }
+
+    /**
+     * Aguarda pacote de heartbeat do servidor
+     */
+    suspend fun receiveHeartbeat(): HeartbeatPacket? = withContext(Dispatchers.IO) {
+        val currentSocket = socket ?: return@withContext null
+
+        return@withContext try {
+            val buffer = ByteArray(1024)
+            val packet = DatagramPacket(buffer, buffer.size)
+            currentSocket.receive(packet)
+            
+            val receivedData = packet.data.copyOfRange(0, packet.length)
+            serializer.deserializeHeartbeat(receivedData)
+        } catch (e: SocketTimeoutException) {
+            null
+        } catch (e: IOException) {
             null
         }
     }

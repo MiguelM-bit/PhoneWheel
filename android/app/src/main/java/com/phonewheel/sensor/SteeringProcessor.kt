@@ -21,7 +21,7 @@ class SteeringProcessor(
     private val minAngle: Float = -450f,
     private val maxAngle: Float = 450f,
     sensitivity: Float = 1.0f,
-    var gyroAxis: GyroAxis = GyroAxis.X
+    var gyroAxis: GyroAxis = GyroAxis.Z
 ) {
 
     // Multiplicador de velocidade angular. Setter valida que o valor seja > 0.

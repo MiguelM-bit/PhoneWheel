@@ -2,9 +2,12 @@ package com.phonewheel.ui
 
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.widget.Toast
+import com.phonewheel.R
 import com.phonewheel.databinding.ActivityMainBinding
 import com.phonewheel.connection.ConnectionManager
 import com.phonewheel.model.SteeringPacket
@@ -50,7 +53,7 @@ class MainActivity : AppCompatActivity() {
             minAngle = -450f,
             maxAngle = 450f,
             sensitivity = 1.0f,
-            gyroAxis = GyroAxis.X
+                    gyroAxis = GyroAxis.Z
         )
     }
 
@@ -58,7 +61,7 @@ class MainActivity : AppCompatActivity() {
         gyroscopeManager = GyroscopeManager(this)
 
         if (!gyroscopeManager.hasGyroscope()) {
-            binding.textViewStatus.text = "Giroscópio não disponível"
+                    binding.textViewAngleOverlay.text = "Sem giroscópio"
             binding.buttonRecenter.isEnabled = false
             Toast.makeText(
                 this,
@@ -76,7 +79,7 @@ class MainActivity : AppCompatActivity() {
 
             gyroscopeManager.startListening()
         } catch (e: SensorNotAvailableException) {
-            binding.textViewStatus.text = "Erro ao ativar giroscópio"
+                    binding.textViewAngleOverlay.text = "Erro no giroscópio"
             binding.buttonRecenter.isEnabled = false
             Toast.makeText(this, e.message, Toast.LENGTH_SHORT).show()
         }
@@ -143,8 +146,8 @@ class MainActivity : AppCompatActivity() {
                         val server = servers[which]
                         binding.editTextIp.setText(server.ip)
                         binding.editTextPort.setText(server.port.toString())
-                                            onConnectClicked()
-                                        }
+                                                onConnectClicked()
+                                            }
                     .setNegativeButton("Cancelar", null)
                     .show()
             } finally {
@@ -212,47 +215,85 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateConnectionUi(state: ConnectionState) {
-        when (state) {
-            ConnectionState.CONNECTED -> {
-                binding.textViewConnectionStatus.text = "Status: Conectado"
-                binding.buttonConnect.isEnabled = false
-                binding.buttonDisconnect.isEnabled = true
-                binding.editTextIp.isEnabled = false
-                binding.editTextPort.isEnabled = false
+            val (statusText, statusColor) = when (state) {
+                ConnectionState.CONNECTED ->
+                    getString(R.string.status_connected) to ContextCompat.getColor(this, R.color.status_connected)
+                ConnectionState.CONNECTING ->
+                    getString(R.string.status_connecting) to ContextCompat.getColor(this, R.color.status_connecting)
+                ConnectionState.CONNECTION_LOST ->
+                    getString(R.string.status_lost) to ContextCompat.getColor(this, R.color.status_lost)
+                ConnectionState.DISCONNECTED ->
+                    getString(R.string.status_disconnected) to ContextCompat.getColor(this, R.color.status_disconnected)
             }
-            ConnectionState.CONNECTING -> {
-                binding.textViewConnectionStatus.text = "Status: Conectando..."
-                binding.buttonConnect.isEnabled = false
-                binding.buttonDisconnect.isEnabled = false
-                binding.editTextIp.isEnabled = false
-                binding.editTextPort.isEnabled = false
-            }
-            ConnectionState.DISCONNECTED -> {
-                binding.textViewConnectionStatus.text = "Status: Desconectado"
-                binding.buttonConnect.isEnabled = true
-                binding.buttonDisconnect.isEnabled = false
-                binding.editTextIp.isEnabled = true
-                binding.editTextPort.isEnabled = true
-            }
-            ConnectionState.CONNECTION_LOST -> {
-                binding.textViewConnectionStatus.text = "Status: Conexão Perdida"
-                binding.buttonConnect.isEnabled = true
-                binding.buttonDisconnect.isEnabled = false
-                binding.editTextIp.isEnabled = true
-                binding.editTextPort.isEnabled = true
-            }
+
+            binding.textViewConnectionStatus.text = statusText
+            binding.statusDot.background.setTint(statusColor)
+
+            when (state) {
+                ConnectionState.CONNECTED -> {
+                    binding.buttonConnect.isEnabled = false
+                    binding.buttonDisconnect.isEnabled = true
+                    binding.editTextIp.isEnabled = false
+                    binding.editTextPort.isEnabled = false
+                }
+                ConnectionState.CONNECTING -> {
+                    binding.buttonConnect.isEnabled = false
+                    binding.buttonDisconnect.isEnabled = false
+                    binding.editTextIp.isEnabled = false
+                    binding.editTextPort.isEnabled = false
+                }
+                ConnectionState.DISCONNECTED -> {
+                    binding.buttonConnect.isEnabled = true
+                    binding.buttonDisconnect.isEnabled = false
+                    binding.editTextIp.isEnabled = true
+                    binding.editTextPort.isEnabled = true
+                }
+                ConnectionState.CONNECTION_LOST -> {
+                    binding.buttonConnect.isEnabled = true
+                    binding.buttonDisconnect.isEnabled = false
+                    binding.editTextIp.isEnabled = true
+                    binding.editTextPort.isEnabled = true
+                }
         }
     }
 
-    private fun updateDisplay() {
-        binding.textViewStatus.text = buildString {
-            append("PhoneWheel - Direção\n\n")
-            append("Ângulo: ${String.format("%.1f", steeringProcessor.getCurrentAngle())}°\n")
-            append("Eixo: ${steeringProcessor.gyroAxis.name}\n")
-            append("Sensibilidade: ${String.format("%.2f", steeringProcessor.sensitivity)}x\n")
-            append("Range: ${String.format("%.0f", -450f)}° a ${String.format("%.0f", 450f)}°")
+        private fun updateDisplay() {
+            val angle = steeringProcessor.getCurrentAngle()
+            val angleText = String.format("%.1f°", angle)
+
+            binding.textViewAngleOverlay.text = angleText
+            binding.textViewAngleValue.text = angleText
+            binding.textViewGyroValue.text =
+                String.format("%.4f rad/s", steeringProcessor.getLastRawAngularVelocity())
+            binding.textViewAxisValue.text = steeringProcessor.gyroAxis.name
+            binding.textViewSensitivityValue.text =
+                String.format("%.2fx", steeringProcessor.sensitivity)
+
+            val (min, max) = steeringProcessor.getAngleRange()
+            binding.textViewRangeValue.text = String.format("%.0f° a %.0f°", min, max)
+
+            binding.steeringWheel.setAngle(angle)
+            updateAxisButtons()
         }
-    }
+
+        private fun updateAxisButtons() {
+            val activeColor = ContextCompat.getColor(this, R.color.accent_red)
+            val inactiveColor = ContextCompat.getColor(this, R.color.surface_light)
+            val activeText = ContextCompat.getColor(this, R.color.white)
+            val inactiveText = ContextCompat.getColor(this, R.color.text_primary)
+
+            val buttons = listOf(
+                binding.buttonAxisX to GyroAxis.X,
+                binding.buttonAxisY to GyroAxis.Y,
+                binding.buttonAxisZ to GyroAxis.Z
+            )
+
+            for ((button, axis) in buttons) {
+                val active = steeringProcessor.gyroAxis == axis
+                button.backgroundTintList = ColorStateList.valueOf(if (active) activeColor else inactiveColor)
+                button.setTextColor(if (active) activeText else inactiveText)
+            }
+        }
 
     override fun onPause() {
         super.onPause()

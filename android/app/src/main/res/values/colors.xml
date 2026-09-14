@@ -1,10 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Fundo e superfícies (paleta escura, igual ao WPF) -->
+    <color name="background">#1E1E1E</color>
+    <color name="surface">#2B2B2B</color>
+    <color name="surface_light">#3A3A3A</color>
+    <color name="surface_dark">#141414</color>
+
+    <!-- Texto -->
+    <color name="text_primary">#E0E0E0</color>
+    <color name="text_secondary">#9E9E9E</color>
+
+    <!-- Destaque -->
+    <color name="accent_red">#E53935</color>
+    <color name="accent_red_dark">#B71C1C</color>
+
+    <!-- Status -->
+    <color name="status_connected">#4CAF50</color>
+    <color name="status_connecting">#FFC107</color>
+    <color name="status_disconnected">#F44336</color>
+    <color name="status_lost">#FF9800</color>
+
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
 </resources>

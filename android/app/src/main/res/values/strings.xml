@@ -3,4 +3,32 @@
     <string name="app_name">PhoneWheel</string>
     <string name="app_status">Inicializando...</string>
     <string name="app_description">Controlador Giroscópico</string>
+
+    <!-- Status de conexão -->
+    <string name="status_connected">Conectado</string>
+    <string name="status_connecting">Conectando…</string>
+    <string name="status_disconnected">Desconectado</string>
+    <string name="status_lost">Conexão Perdida</string>
+
+    <!-- Controles -->
+    <string name="button_recenter">Recenter</string>
+    <string name="button_axis_x">Eixo X</string>
+    <string name="button_axis_y">Eixo Y</string>
+    <string name="button_axis_z">Eixo Z</string>
+    <string name="button_discover">Buscar servidor</string>
+    <string name="button_connect">Conectar</string>
+    <string name="button_disconnect">Desconectar</string>
+
+    <!-- Campos -->
+    <string name="hint_ip">IP do computador (ex: 192.168.0.10)</string>
+    <string name="hint_port">Porta (padrão: 5005)</string>
+
+    <!-- Labels -->
+    <string name="label_angle">Ângulo</string>
+    <string name="label_gyro">Gyro</string>
+    <string name="label_axis">Eixo</string>
+    <string name="label_sensitivity">Sensibilidade</string>
+    <string name="label_range">Range</string>
+    <string name="label_connection">Conexão UDP</string>
+    <string name="label_controls">Controles</string>
 </resources>

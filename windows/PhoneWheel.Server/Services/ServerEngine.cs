@@ -71,6 +71,8 @@ public class ServerEngine : IDisposable
     private ConnectionWatchdog? _watchdog;
     private CancellationTokenSource? _watchdogCts;
     private Task? _watchdogTask;
+    private CancellationTokenSource? _heartbeatCts;
+    private Task? _heartbeatTask;
     private bool _isRunning;
     private bool _disposed;
 
@@ -150,6 +152,10 @@ public class ServerEngine : IDisposable
         _watchdogCts = new CancellationTokenSource();
         _watchdogTask = Task.Run(() => WatchdogLoopAsync(_watchdogCts.Token));
 
+        // Heartbeat
+        _heartbeatCts = new CancellationTokenSource();
+        _heartbeatTask = Task.Run(() => HeartbeatLoopAsync(_heartbeatCts.Token));
+
         Log(EngineLogLevel.Info, "Iniciando servidor UDP na porta {0}...", _port);
         Log(EngineLogLevel.Info, "Timeout de desconexão: {0} ms", _watchdogTimeoutMs);
         Log(EngineLogLevel.Info, "");
@@ -211,6 +217,24 @@ public class ServerEngine : IDisposable
         _watchdogCts?.Dispose();
         _watchdogCts = null;
         _watchdogTask = null;
+
+        // Parar o heartbeat
+        _heartbeatCts?.Cancel();
+        if (_heartbeatTask != null)
+        {
+            try
+            {
+                await _heartbeatTask.ConfigureAwait(false);
+            }
+            catch
+            {
+                // Ignorar erros
+            }
+        }
+
+        _heartbeatCts?.Dispose();
+        _heartbeatCts = null;
+        _heartbeatTask = null;
 
         if (_watchdog != null)
         {
@@ -277,6 +301,48 @@ public class ServerEngine : IDisposable
         }
     }
 
+    /// <summary>
+    /// Loop de heartbeat: envia status de conexão para os clientes a cada 1000 ms.
+    /// </summary>
+    private async Task HeartbeatLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+
+                if (_connectedClients.IsEmpty)
+                {
+                    continue;
+                }
+
+                var heartbeat = new HeartbeatPacket
+                {
+                    Device = "PhoneWheel",
+                    Version = "2.0",
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+
+                foreach (var client in _connectedClients.Values)
+                {
+                    if (client.RemoteEndPoint != null)
+                    {
+                        await _server.SendHeartbeatAsync(client.RemoteEndPoint, heartbeat).ConfigureAwait(false);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch
+            {
+                // Ignorar erros no envio de heartbeat
+            }
+        }
+    }
+
     private void OnWatchdogConnectionLost(object? sender, ConnectionLostEventArgs args)
     {
         Log(EngineLogLevel.Warning, "Conexão perdida! Nenhum pacote recebido por {0} ms", args.ElapsedMilliseconds);
@@ -303,9 +369,10 @@ public class ServerEngine : IDisposable
                 {
                     ConnectedAt = DateTimeOffset.UtcNow,
                     LastPacketAt = DateTimeOffset.UtcNow,
-                    SteeringPacketCount = 0
+                    SteeringPacketCount = 0,
+                    RemoteEndPoint = args.RemoteEndPoint
                 },
-                (_, existing) => existing with { LastPacketAt = DateTimeOffset.UtcNow }
+                (_, existing) => existing with { LastPacketAt = DateTimeOffset.UtcNow, RemoteEndPoint = args.RemoteEndPoint }
             );
 
             Log(EngineLogLevel.Success, "CONNECT recebido de {0}:{1}", clientIp, args.RemoteEndPoint.Port);
@@ -380,7 +447,8 @@ public class ServerEngine : IDisposable
                 clientInfo with
                 {
                     LastPacketAt = DateTimeOffset.UtcNow,
-                    SteeringPacketCount = clientInfo.SteeringPacketCount + 1
+                    SteeringPacketCount = clientInfo.SteeringPacketCount + 1,
+                    RemoteEndPoint = args.RemoteEndPoint
                 },
                 clientInfo
             );

@@ -58,3 +58,17 @@ data class DiscoverAckPacket(
         const val TYPE_DISCOVER_ACK = "discover_ack"
     }
 }
+
+/**
+ * Pacote de heartbeat enviado pelo servidor periodicamente
+ */
+data class HeartbeatPacket(
+    val type: String = TYPE_HEARTBEAT,
+    val device: String = "PhoneWheel",
+    val version: String = "2.0",
+    val timestamp: Long = System.currentTimeMillis()
+) {
+    companion object {
+        const val TYPE_HEARTBEAT = "heartbeat"
+    }
+}

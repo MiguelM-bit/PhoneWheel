@@ -61,8 +61,8 @@ public class ConnectionWatchdog
 
         _timeoutMilliseconds = timeoutMilliseconds;
         _lastPacketTimestampMs = Stopwatch.GetTimestamp() / (Stopwatch.Frequency / 1000);
-        _isConnected = true;
-        _alreadyLoggedTimeout = false;
+        _isConnected = false;
+        _alreadyLoggedTimeout = true;
     }
 
     /// <summary>

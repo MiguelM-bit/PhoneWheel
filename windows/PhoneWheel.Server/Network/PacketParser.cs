@@ -160,6 +160,22 @@ public static class PacketParser
         return JsonSerializer.Serialize(dto, JsonOptions);
     }
 
+    /// <summary>
+    /// Serializa um pacote de heartbeat para JSON.
+    /// </summary>
+    public static string SerializeHeartbeat(HeartbeatPacket packet)
+    {
+        var dto = new HeartbeatPacketDto
+        {
+            Type = packet.Type,
+            Device = packet.Device,
+            Version = packet.Version,
+            Timestamp = packet.Timestamp
+        };
+
+        return JsonSerializer.Serialize(dto, JsonOptions);
+    }
+
         /// <summary>
         /// Tenta desserializar um pacote de descoberta (DISCOVER).
         /// </summary>
@@ -281,6 +297,21 @@ public static class PacketParser
     }
 
     private class ConnectAckPacketDto
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = "";
+
+        [JsonPropertyName("device")]
+        public string Device { get; set; } = "";
+
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = "";
+
+        [JsonPropertyName("timestamp")]
+        public long Timestamp { get; set; }
+    }
+
+    private class HeartbeatPacketDto
     {
         [JsonPropertyName("type")]
         public string Type { get; set; } = "";

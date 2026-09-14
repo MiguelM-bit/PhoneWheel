@@ -193,6 +193,36 @@ Enviado pelo Windows em resposta a um `discover`. Informa ao Android o IP e a po
 - O Android também conhece o IP do servidor pela origem do pacote; `server_ip` é informativo para exibição/verificação
 - Apenas uma resposta por `discover` é necessária; respostas duplicadas são ignoradas
 
+## 📦 Pacote: `heartbeat` (Manutenção de Conexão)
+
+Enviado pelo servidor Windows periodicamente (ex: a cada 1 segundo) para os clientes conectados para informar que o servidor continua ativo.
+
+### Formato
+
+```json
+{
+  "type": "heartbeat",
+  "device": "PhoneWheel",
+  "version": "2.0",
+  "timestamp": 123456789
+}
+```
+
+### Descrição dos Campos
+
+| Campo       | Tipo   | Descrição                                          |
+|-------------|--------|--------------------------------------------------|
+| `type`      | string | Sempre `"heartbeat"`                             |
+| `device`    | string | Identificador do dispositivo (`"PhoneWheel"`)    |
+| `version`   | string | Versão do protocolo suportada pelo Windows        |
+| `timestamp` | long   | Timestamp do servidor Windows em milissegundos    |
+
+### Observações
+
+- O Windows envia heartbeats periodicamente em uma thread/tarefa paralela após a conexão inicial.
+- O Android escuta ativamente por esses pacotes para monitorar a saúde do servidor.
+- Se o Android passar do limite de tempo configurado (ex: 3 segundos) sem receber um heartbeat, ele deve declarar a conexão como perdida (estado `CONNECTION_LOST`).
+
 ---
 
 ## 🔄 Fluxo de Comunicação Completo
@@ -217,12 +247,16 @@ Enviado pelo Windows em resposta a um `discover`. Informa ao Android o IP e a po
          │ ← ─────────────── CONNECT_ACK ─────────────│
          │                                            │
          │ (marca como CONNECTED)                     │
-         │ (aguarda steering)                         │ (aguarda steering)
+         │ (aguarda steering/heartbeat)               │ (aguarda steering, envia heartbeat)
          │                                            │
          │─────────────── STEERING ──────────────────→ │
+         │ ← ────────────── HEARTBEAT ─────────────── │
          │─────────────── STEERING ──────────────────→ │
          │─────────────── STEERING ──────────────────→ │
-
+         │ ← ────────────── HEARTBEAT ─────────────── │
+         │                                            │
+         │ (sem heartbeat por 3s)                     │ (sem steering por 0.5s)
+         │ (marca como CONNECTION_LOST)               │ (marca como DESCONECTADO)
 ```
 
 ---

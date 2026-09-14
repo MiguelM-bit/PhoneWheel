@@ -5,8 +5,12 @@ import com.phonewheel.model.SteeringPacket
 import com.phonewheel.network.ConnectionState
 import com.phonewheel.network.UdpClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,13 +30,17 @@ class ConnectionManager(
     private val udpClient: UdpClient = UdpClient(),
     private val handshakeTimeoutMs: Long = 5000,
     private val retryIntervalMs: Long = 500,
-    private val maxRetries: Int = 10
+    private val maxRetries: Int = 10,
+    private val heartbeatTimeoutMs: Long = 3000
 ) {
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
     private var handshakeJob: Job? = null
+    private var heartbeatJob: Job? = null
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     private var connectedServerAddress: String = ""
     private var connectedServerPort: Int = 0
 
@@ -47,6 +55,8 @@ class ConnectionManager(
         if (_connectionState.value == ConnectionState.CONNECTING || _connectionState.value == ConnectionState.CONNECTED) {
             return@withContext true
         }
+
+        disconnect() // Limpa qualquer estado anterior
 
         connectedServerAddress = host
         connectedServerPort = port
@@ -66,6 +76,7 @@ class ConnectionManager(
 
         if (handshakeSuccess) {
             _connectionState.value = ConnectionState.CONNECTED
+            startHeartbeatMonitor()
             true
         } else {
             _connectionState.value = ConnectionState.DISCONNECTED
@@ -75,11 +86,37 @@ class ConnectionManager(
     }
 
     /**
+     * Inicia monitoramento de heartbeat do servidor
+     */
+    private fun startHeartbeatMonitor() {
+        heartbeatJob?.cancel()
+        heartbeatJob = scope.launch {
+            var lastHeartbeatReceived = System.currentTimeMillis()
+            while (isActive && isConnected()) {
+                val heartbeat = udpClient.receiveHeartbeat()
+                val now = System.currentTimeMillis()
+                
+                if (heartbeat != null && heartbeat.device == "PhoneWheel") {
+                    lastHeartbeatReceived = now
+                } else {
+                    if (now - lastHeartbeatReceived > heartbeatTimeoutMs) {
+                        _connectionState.value = ConnectionState.CONNECTION_LOST
+                        udpClient.disconnect()
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Desconecta do servidor.
      */
     fun disconnect() {
         handshakeJob?.cancel()
         handshakeJob = null
+        heartbeatJob?.cancel()
+        heartbeatJob = null
         udpClient.disconnect()
         _connectionState.value = ConnectionState.DISCONNECTED
     }

@@ -154,6 +154,28 @@ public class UdpServer : IDisposable
             }
         }
 
+        /// <summary>
+        /// Envia um pacote de heartbeat para um cliente.
+        /// </summary>
+        public async Task SendHeartbeatAsync(IPEndPoint remoteEndPoint, HeartbeatPacket packet)
+        {
+            if (_udpClient == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var json = PacketParser.SerializeHeartbeat(packet);
+                var data = Encoding.UTF8.GetBytes(json);
+                await _udpClient.SendAsync(data, data.Length, remoteEndPoint).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Erro ao enviar HEARTBEAT] {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
     /// <summary>
     /// Loop de escuta contínuo de pacotes UDP.
     /// </summary>

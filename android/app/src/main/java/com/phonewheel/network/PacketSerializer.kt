@@ -5,12 +5,13 @@ import com.phonewheel.model.ConnectPacket
 import com.phonewheel.model.ConnectAckPacket
 import com.phonewheel.model.DiscoverPacket
 import com.phonewheel.model.DiscoverAckPacket
+import com.phonewheel.model.HeartbeatPacket
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 
 /**
  * Responsável por serializar pacotes para formato JSON UTF-8.
- * Suporta múltiplos tipos de pacotes (steering, connect, connect_ack, discover, discover_ack).
+ * Suporta múltiplos tipos de pacotes (steering, connect, connect_ack, discover, discover_ack, heartbeat).
  */
 class PacketSerializer {
 
@@ -73,6 +74,23 @@ class PacketSerializer {
                 version = json.getString("version"),
                 serverIp = json.getString("server_ip"),
                 serverPort = json.getInt("server_port"),
+                timestamp = json.getLong("timestamp")
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun deserializeHeartbeat(data: ByteArray): HeartbeatPacket? {
+        return try {
+            val json = JSONObject(String(data, StandardCharsets.UTF_8))
+            if (json.getString("type") != "heartbeat") {
+                return null
+            }
+            HeartbeatPacket(
+                type = json.getString("type"),
+                device = json.getString("device"),
+                version = json.getString("version"),
                 timestamp = json.getLong("timestamp")
             )
         } catch (e: Exception) {

@@ -43,7 +43,7 @@
 
             <!-- Volante -->
             <Grid Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Grid Width="320" Height="320">
+                <Grid Width="320" Height="320" RenderTransformOrigin="0.5,0.5">
                     <Grid.RenderTransform>
                         <RotateTransform Angle="{Binding WheelAngle}"/>
                     </Grid.RenderTransform>

@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.Windows;
+using Microsoft.Web.WebView2.Core;
 using PhoneWheel.Server.UI.ViewModels;
 
 namespace PhoneWheel.Server.UI;
@@ -9,6 +10,8 @@ namespace PhoneWheel.Server.UI;
 /// </summary>
 public partial class MainWindow : Window
 {
+    private const string ControllerTesterUrl = "https://controllertest.io/pt/embed/gamepad-mapping";
+
     private readonly MainViewModel _viewModel;
 
     public MainWindow()
@@ -20,6 +23,26 @@ public partial class MainWindow : Window
 
         _viewModel.LogLines.CollectionChanged += OnLogLinesChanged;
         Closed += OnClosed;
+        Loaded += OnLoaded;
+    }
+
+    private async void OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await ControllerTester.EnsureCoreWebView2Async();
+                        ControllerTester.Source = new Uri(ControllerTesterUrl);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Não foi possível carregar o testador de controle (controllertest.io).\n\n" +
+                "Verifique se o WebView2 Runtime está instalado.\n" +
+                $"Detalhe: {ex.Message}",
+                "Teste de controle",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     private void OnLogLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)

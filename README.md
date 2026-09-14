@@ -11,7 +11,11 @@ Monorepo que integra um **aplicativo Android** (Kotlin) a um **servidor Windows*
 │  │ Gyroscope    │→ │ SteeringProcessor│→ │ UdpClient     │  │
 │  │ Manager      │  │ (integra ângulo) │  │ (JSON/UDP)    │  │
 │  └──────────────┘  └──────────────────┘  └───────┬───────┘  │
-└───────────────────────────────────────────────────┼─────────┘
+│  ┌──────────────┐  ┌──────────────────┐          │          │
+│  │ UI (10 botões)│→ │ ButtonPacket     │──────────┘          │
+│  │ touch        │  │ (serializer)     │                     │
+│  └──────────────┘  └──────────────────┘                     │
+└─────────────────────────────────────────────────────────────┘
                                                     │ UDP :5005
                                                     ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -19,6 +23,10 @@ Monorepo que integra um **aplicativo Android** (Kotlin) a um **servidor Windows*
 │  ┌──────────┐  ┌────────────────┐  ┌────────────────────┐   │
 │  │ UdpServer│→ │ SteeringPipeline│→ │ IVirtualController│   │
 │  │ (rede)   │  │ (calibra+norm.) │  │ (vJoy ou ViGEmBus)│   │
+│  │          │  └────────────────┘  │ (SetSteering/      │   │
+│  │          │  ┌────────────────┐  │  SetButton)        │   │
+│  │          │→ │ Validação      │→ │                    │   │
+│  │          │  │ (cliente+watch)│  │                    │   │
 │  └──────────┘  └────────────────┘  └────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -27,10 +35,11 @@ Monorepo que integra um **aplicativo Android** (Kotlin) a um **servidor Windows*
 
 1. **Android** lê o giroscópio, integra a velocidade angular em um ângulo acumulado (`-450°` a `+450°`) e envia pacotes JSON via UDP a cada ~50ms.
 2. **Windows** recebe na porta `5005`, valida o JSON, aplica calibração → deadzone → normalização → suavização e envia o valor normalizado `[-1.0, +1.0]` ao controlador virtual.
-3. **Handshake**: o Android envia `connect` e só envia `steering` após receber `connect_ack`.
-4. **Descoberta de servidor**: o Android pode localizar o servidor na rede via broadcast UDP (`discover`/`discover_ack`) sem digitar o IP manualmente.
-5. **Watchdog**: o servidor detecta perda de conexão (500ms sem pacotes) e centraliza o volante automaticamente.
-6. **Controle virtual**: o valor normalizado é enviado ao backend selecionado — **vJoy** (joystick DirectInput) ou **Xbox 360** (ViGEmBus/XInput) — que os jogos reconhecem como um controle real.
+3. **Botões**: a UI do Android envia eventos de botão (`type: "button"`) pela mesma conexão UDP; o servidor valida o cliente e encaminha `button`/`pressed` para `IVirtualController.SetButton()`.
+4. **Handshake**: o Android envia `connect` e só envia `steering`/`button` após receber `connect_ack`.
+5. **Descoberta de servidor**: o Android pode localizar o servidor na rede via broadcast UDP (`discover`/`discover_ack`) sem digitar o IP manualmente.
+6. **Watchdog**: o servidor detecta perda de conexão (500ms sem pacotes), centraliza o volante e **libera todos os botões pressionados** automaticamente.
+7. **Controle virtual**: o valor normalizado é enviado ao backend selecionado — **vJoy** (joystick DirectInput) ou **Xbox 360** (ViGEmBus/XInput) — que os jogos reconhecem como um controle real.
 
 ## 📁 Estrutura do Monorepo
 
@@ -106,6 +115,7 @@ Abre a janela WPF com:
 - **Volante giratório** que acompanha o ângulo de inclinação do celular
 - Painel com ângulo recebido, calibrado, normalizado, giroscópio e contagem de pacotes
 - **Seletor de controlador virtual** (vJoy ou Xbox 360) e log em tempo real
+- Aba **Teste de controle** com o [controllertest.io](https://controllertest.io) embutido (WebView2) para validar os botões do controle virtual
 
 ### Console (alternativa)
 
@@ -164,6 +174,9 @@ Instruções de uso e teste — incluindo a **descoberta de servidor** — estã
 | Interface visual WPF (volante, status, iniciar/parar) | ✅ Implementado e testado |
 | Controle virtual **vJoy** (joystick DirectInput) | ✅ Integração real implementada |
 | Controle virtual **Xbox 360** (ViGEmBus/XInput) | ✅ Integração real implementada |
+| Botões (pacote `button`, Android → Windows) | ✅ Implementado e testado |
+| Liberação de botões na perda de conexão | ✅ Implementado |
+| Teste de controle (controllertest.io na UI) | ✅ Implementado |
 | Teste em jogo real | ⚠️ Pendente (ver [TESTING.md](TESTING.md)) |
 | Testes unitários | ❌ Não existem |
 
@@ -176,6 +189,9 @@ Instruções de uso e teste — incluindo a **descoberta de servidor** — estã
 - [x] Interface visual WPF (volante, status, iniciar/parar)
 - [x] Integração real com driver vJoy (Fase 2)
 - [x] Integração real com ViGEmBus (Xbox 360)
+- [x] Botões touch (Android) → controle virtual (Windows)
+- [x] Liberação de botões na perda de conexão
+- [x] Testador de controle embutido (controllertest.io)
 - [ ] Teste em jogo real (validação final)
 - [ ] Testes unitários (Android e Windows)
 - [ ] Configuração via arquivo (calibração, deadzone, porta)

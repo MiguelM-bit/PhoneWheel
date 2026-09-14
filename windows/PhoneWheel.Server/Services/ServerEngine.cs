@@ -68,6 +68,7 @@ public class ServerEngine : IDisposable
         private readonly SteeringPipeline _steeringPipeline;
         private readonly UdpServer _server;
         private readonly ConcurrentDictionary<string, ClientInfo> _connectedClients = new();
+                private readonly ConcurrentDictionary<int, byte> _pressedButtons = new();
 
     private ConnectionWatchdog? _watchdog;
     private CancellationTokenSource? _watchdogCts;
@@ -256,7 +257,10 @@ public class ServerEngine : IDisposable
             _watchdog = null;
         }
 
-        // Desconectar o controle virtual
+                // Liberar botões pressionados antes de desconectar o controle virtual
+                ReleaseAllButtons();
+
+                // Desconectar o controle virtual
         try
         {
                     _virtualController.Disconnect();
@@ -360,8 +364,9 @@ public class ServerEngine : IDisposable
     {
         Log(EngineLogLevel.Warning, "Conexão perdida! Nenhum pacote recebido por {0} ms", args.ElapsedMilliseconds);
         Log(EngineLogLevel.Info, "Volante centralizado (segurança)");
-        ConnectionStateChanged?.Invoke(this, ConnectionStatus.Disconnected);
-    }
+            ReleaseAllButtons();
+            ConnectionStateChanged?.Invoke(this, ConnectionStatus.Disconnected);
+        }
 
     private void OnWatchdogConnectionRestored(object? sender, ConnectionRestoredEventArgs args)
     {
@@ -514,13 +519,29 @@ public class ServerEngine : IDisposable
             // Registrar no watchdog (pacote válido mantém a conexão ativa)
             _watchdog?.RecordPacketReceived();
 
-            // Encaminhar o evento ao controle virtual
-            _virtualController.SetButton(args.Packet.Button, args.Packet.Pressed);
+                        // Só processar botões se o watchdog não detectou timeout
+                        if (_watchdog?.Status != ConnectionStatus.Connected)
+                        {
+                            return;
+                        }
 
-            Log(EngineLogLevel.Info, "Botão {0} {1} de {2}",
-                args.Packet.Button,
-                args.Packet.Pressed ? "pressionado" : "liberado",
-                ipKey);
+                        // Encaminhar o evento ao controle virtual
+                        _virtualController.SetButton(args.Packet.Button, args.Packet.Pressed);
+
+                        // Rastrear botões pressionados para liberação em caso de desconexão
+                        if (args.Packet.Pressed)
+                        {
+                            _pressedButtons[args.Packet.Button] = 1;
+                        }
+                        else
+                        {
+                            _pressedButtons.TryRemove(args.Packet.Button, out _);
+                        }
+
+                        Log(EngineLogLevel.Info, "Botão {0} {1} de {2}",
+                            args.Packet.Button,
+                            args.Packet.Pressed ? "pressionado" : "liberado",
+                            ipKey);
         }
         catch (VirtualControllerException ex)
         {
@@ -543,6 +564,44 @@ public class ServerEngine : IDisposable
             // Ignorar erros de propagação
         }
     }
+
+        /// <summary>
+        /// Libera todos os botões que estão pressionados no controle virtual.
+        /// Usado quando a conexão é perdida ou o servidor é encerrado,
+        /// para evitar que botões fiquem "presos" no controle virtual.
+        /// </summary>
+        private void ReleaseAllButtons()
+        {
+            if (_pressedButtons.IsEmpty)
+            {
+                return;
+            }
+
+            var released = 0;
+            foreach (var button in _pressedButtons.Keys)
+            {
+                try
+                {
+                    _virtualController.SetButton(button, false);
+                    released++;
+                }
+                catch (VirtualControllerException ex)
+                {
+                    Log(EngineLogLevel.Warning, "Falha ao liberar botão {0}: {1}", button, ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    Log(EngineLogLevel.Warning, "Erro ao liberar botão {0}: {1}", button, ex.Message);
+                }
+            }
+
+            _pressedButtons.Clear();
+
+            if (released > 0)
+            {
+                Log(EngineLogLevel.Info, "Botões pressionados liberados ({0})", released);
+            }
+        }
 
     private void Log(EngineLogLevel level, string message, params object[] args)
     {

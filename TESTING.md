@@ -112,6 +112,35 @@ $socket.Send($bytes, $bytes.Length, "127.0.0.1", 5005)
 
 ---
 
+## 🎮 Testador de Controle (controllertest.io)
+
+A UI WPF inclui uma aba **"Teste de controle"** com o [controllertest.io](https://controllertest.io) embutido (via WebView2). Ela lê o controle virtual (vJoy ou Xbox 360/ViGEmBus) diretamente do navegador e mostra em tempo real quais botões/eixos estão ativos — ideal para validar a integração sem abrir um jogo.
+
+### Como usar
+
+1. Iniciar o servidor (UI) e pressionar **Iniciar**.
+2. Conectar o Android (ou usar `test-button.ps1` para simular).
+3. Abrir a aba **"Teste de controle"**.
+4. Pressionar os botões touch no Android e observar o mapeamento no testador.
+
+> **Requisito**: o **WebView2 Runtime** deve estar instalado (vem com o Windows 11 ou via [Microsoft Edge WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)). Se faltar, a UI mostra um aviso ao abrir a aba.
+
+### Cenários de teste de botões
+
+| Cenário | Como testar | Esperado |
+|---------|-------------|----------|
+| Pressionar | Tocar e segurar um botão no Android | Botão acende no testador |
+| Soltar | Soltar o botão | Botão apaga no testador |
+| Vários botões | Segurar A + B + X + Y simultaneamente | Todos acendem ao mesmo tempo |
+| Conectar/desconectar | Parar e reiniciar o servidor com o Android conectado | Botões liberados; reconectar funciona |
+| Perder conexão | Desligar o Wi-Fi do celular (ou pausar >500ms) | Watchdog libera todos os botões pressionados |
+| Reconectar | Religar o Wi-Fi / reconectar | Botões voltam a funcionar |
+| Steering + botões | Inclinar o celular enquanto segura um botão | Eixo se move **e** o botão permanece aceso |
+
+> **Nota**: o testador também valida o **eixo do volante** (vJoy: eixo Z; Xbox 360: eixo LX) — incline o celular e confira a barra do eixo no controllertest.io.
+
+---
+
 ## 🤝 Handshake (connect/connect_ack)
 
 O Android envia `connect` e só envia `steering` após receber `connect_ack`. O servidor rejeita `steering` de clientes não autenticados.
@@ -245,7 +274,7 @@ O servidor Windows processa eventos de botão (`type: "button"`) e os encaminha 
 | Back | 8 | Botão 8 | Back |
 | Start | 9 | Botão 9 | Start |
 
-> **Nota**: pressionar um botão já pressionado (ou liberar um já liberado) não gera pacote duplicado. Ao desconectar, todos os botões são liberados automaticamente (`releaseAll`).
+> **Nota**: pressionar um botão já pressionado (ou liberar um já liberado) não gera pacote duplicado. Ao desconectar, todos os botões são liberados automaticamente — no Android via `releaseAll` e no servidor via watchdog (libera todos os botões pressionados no controle virtual).
 
 ### Como testar (script PowerShell)
 
@@ -289,7 +318,7 @@ O mapeamento completo (ID → vJoy → Xbox 360) está na tabela da seção **"C
 
 ## 🛡️ Estabilidade (watchdog)
 
-O servidor centraliza o volante (vJoy Z = 0) após **500ms sem pacotes** e restaura quando os pacotes voltam.
+O servidor centraliza o volante (vJoy Z = 0) e **libera todos os botões pressionados** após **500ms sem pacotes**, restaurando quando os pacotes voltam.
 
 ### Como testar
 
@@ -302,6 +331,7 @@ O servidor centraliza o volante (vJoy Z = 0) após **500ms sem pacotes** e resta
 ```
 Conexão perdida! Nenhum pacote recebido por 558 ms
 vJoy Z = 16383 (0.000 normalizado)   ← volante centralizado
+Botões pressionados liberados        ← botões soltos no controle virtual
 Conexão restaurada
 ```
 
@@ -328,6 +358,7 @@ Conexão restaurada
 | Estabilidade/watchdog | — | ✅ PASS |
 | Controle virtual (vJoy/ViGEmBus) | — | ✅ Implementado (teste em jogo pendente) |
 | Botões (pacote `button`) | — | ✅ Implementado (Android + Windows) |
+| Testador de controle (controllertest.io) | — | ✅ Implementado (aba WebView2 na UI) |
 
 ---
 

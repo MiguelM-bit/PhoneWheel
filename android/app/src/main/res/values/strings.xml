@@ -18,6 +18,7 @@
     <string name="button_discover">Buscar servidor</string>
     <string name="button_connect">Conectar</string>
     <string name="button_disconnect">Desconectar</string>
+    <string name="button_preview">Prévia do controle</string>
 
     <!-- Campos -->
     <string name="hint_ip">IP do computador (ex: 192.168.0.10)</string>
@@ -56,4 +57,13 @@
         <string name="button_rt">RT</string>
         <string name="button_back">Back</string>
         <string name="button_start">Start</string>
-    </resources>
+
+    <!-- Preview mode -->
+    <string name="button_back_to_connection">Voltar</string>
+    <string name="status_preview">PRÉVIA</string>
+
+    <!-- Wheel mode UI -->
+    <string name="wheel_mode_indicator">● VOLANTE</string>
+    <string name="button_exit_wheel_mode">Sair do Volante</string>
+    <string name="button_recenter_wheel">⊕ Recentar</string>
+</resources>

@@ -1,6 +1,6 @@
 package com.phonewheel.ui
 
-import android.app.AlertDialog
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
@@ -8,59 +8,43 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import com.phonewheel.R
-import com.phonewheel.connection.ConnectionHolder
 import com.phonewheel.databinding.ActivityControllerBinding
 import com.phonewheel.model.StickId
-import com.phonewheel.network.ConnectionState
 import com.phonewheel.sensor.GyroscopeManager
 import com.phonewheel.sensor.SensorNotAvailableException
 import com.phonewheel.settings.SettingsManager
 import com.phonewheel.steering.SteeringPipeline
 import com.phonewheel.ui.controls.SettingsOverlayView
-import com.phonewheel.ui.controls.VirtualAnalogStick
 import com.phonewheel.ui.controls.VirtualButton
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 /**
- * Controller Screen: gamepad virtual completo.
+ * Controller Screen em modo prévia offline.
  *
- * Reutiliza a conexão estabelecida na [ConnectionActivity] (via [ConnectionHolder]),
- * sem criar uma segunda conexão. Os controles virtuais enviam os comandos
- * pelos senders existentes.
+ * Reutiliza a mesma interface visual da [ControllerActivity] mas sem
+ * dependência de conexão UDP. Todos os controles funcionam localmente
+ * apenas para demonstração visual.
  *
- * Responsabilidades:
- * - Reutilizar a conexão existente (sem criar uma segunda conexão);
- * - Refletir o estado real da conexão;
- * - Retornar para a [ConnectionActivity] quando a conexão for perdida/desconectada;
- * - Liberar botões/analógicos antes de sair da tela;
- * - Permitir desconectar explicitamente;
- * - Gerenciar configurações via [SettingsManager].
+ * Diferenças em relação à [ControllerActivity]:
+ * - Não requer conexão com o servidor;
+ * - Senders são null (nenhum pacote UDP é enviado);
+ * - Indicador "PRÉVIA" na barra de status;
+ * - Botão "Voltar" em vez de "Desconectar";
+ * - Mantém configurações reais (inversões, sensibilidade).
  */
-class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
+class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
 
     private lateinit var binding: ActivityControllerBinding
     private lateinit var settings: SettingsManager
 
-    private val buttonSender get() = ConnectionHolder.buttonSender
-    private val axisSender get() = ConnectionHolder.axisSender
-
-    private var controlsReleased = false
-
-    // Modo Volante
+    // wheel mode (same as ControllerActivity)
     private var wheelModeEnabled = false
+    private var isWheelLayoutActive = false
     private var wheelInverted = false
     private var gyroscopeManager: GyroscopeManager? = null
     private var steeringPipeline: SteeringPipeline? = null
 
-    // Rastreamento de layout
-    private var isWheelLayoutActive = false
-
-    // Settings overlay
+    // settings overlay
     private var settingsOverlay: SettingsOverlayView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,30 +55,32 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
 
         settings = SettingsManager(this)
 
-        val connectionManager = ConnectionHolder.connectionManager
-
-        if (!connectionManager.isConnected()) {
-            finish()
-            return
-        }
-
         // Aplica configurações salvas
         applySavedSettings()
 
         setupControls()
         setupWheelMode()
-        setupDisconnectButton()
+        setupBackButton()
         setupGearButton()
 
-        lifecycleScope.launch {
-            connectionManager.connectionState.collect { state ->
-                updateConnectionUi(state)
-                if (state == ConnectionState.DISCONNECTED || state == ConnectionState.CONNECTION_LOST) {
-                    releaseAllControls()
-                    finish()
-                }
-            }
-        }
+        // Show preview indicator
+        showPreviewIndicator()
+    }
+
+    // -------------------------------------------------------------------------
+    // Indicador de prévia
+    // -------------------------------------------------------------------------
+
+    private fun showPreviewIndicator() {
+        // Change status text to "PRÉVIA" with a distinct color
+        binding.textViewConnectionStatus.text = "PRÉVIA"
+        binding.textViewConnectionStatus.setTextColor(
+            ContextCompat.getColor(this, R.color.accent_red)
+        )
+        // Change status dot to amber/yellow to indicate preview mode
+        binding.statusDot.background.setTint(
+            Color.rgb(255, 193, 7) // Amber for preview
+        )
     }
 
     // -------------------------------------------------------------------------
@@ -121,17 +107,20 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     }
 
     // -------------------------------------------------------------------------
-    // Controles
+    // Controles — todos com sender null (preview only)
     // -------------------------------------------------------------------------
 
     private fun setupControls() {
-        binding.dpad.sender = buttonSender
+        // DPad — sender null (nenhum pacote UDP)
+        binding.dpad.sender = null
 
+        // Analog sticks — axisSender null (nenhum pacote UDP)
         binding.leftStick.stickId = StickId.LEFT
-        binding.leftStick.axisSender = axisSender
+        binding.leftStick.axisSender = null
         binding.rightStick.stickId = StickId.RIGHT
-        binding.rightStick.axisSender = axisSender
+        binding.rightStick.axisSender = null
 
+        // All buttons — sender null (nenhum pacote UDP)
         configureButton(binding.buttonA, 0, getString(R.string.button_a))
         configureButton(binding.buttonB, 1, getString(R.string.button_b))
         configureButton(binding.buttonX, 2, getString(R.string.button_x))
@@ -149,40 +138,49 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     private fun configureButton(button: VirtualButton, id: Int, label: String) {
         button.buttonId = id
         button.label = label
-        button.sender = buttonSender
+        button.sender = null  // No network — preview only
     }
 
     // -------------------------------------------------------------------------
-    // Botão de desconexão (com confirmação opcional)
+    // Controles no layout volante — todos com sender null (preview only)
     // -------------------------------------------------------------------------
 
-    private fun setupDisconnectButton() {
+    private fun setupWheelControls() {
+        binding.dpad.sender = null
+
+        binding.leftStick.stickId = StickId.LEFT
+        binding.leftStick.axisSender = null
+
+        binding.rightStick.stickId = StickId.RIGHT
+        binding.rightStick.axisSender = null
+
+        configureButton(binding.buttonA, 0, getString(R.string.button_a))
+        configureButton(binding.buttonB, 1, getString(R.string.button_b))
+        configureButton(binding.buttonX, 2, getString(R.string.button_x))
+        configureButton(binding.buttonY, 3, getString(R.string.button_y))
+        configureButton(binding.buttonLB, 4, getString(R.string.button_lb))
+        configureButton(binding.buttonRB, 5, getString(R.string.button_rb))
+        configureButton(binding.buttonLT, 14, getString(R.string.button_lt))
+        configureButton(binding.buttonRT, 15, getString(R.string.button_rt))
+        configureButton(binding.buttonRS, 7, getString(R.string.button_rs))
+    }
+
+    private fun setupRecenterButton() {
+        binding.buttonRecenter.setOnClickListener {
+            recenterWheel()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Botão de voltar (substitui o desconectar)
+    // -------------------------------------------------------------------------
+
+    private fun setupBackButton() {
+        binding.buttonDisconnect.text = getString(R.string.button_back_to_connection)
+        binding.buttonDisconnect.isEnabled = true
         binding.buttonDisconnect.setOnClickListener {
-            if (settings.confirmDisconnect) {
-                showDisconnectConfirmation()
-            } else {
-                disconnectAndFinish()
-            }
+            finish()
         }
-    }
-
-    private fun showDisconnectConfirmation() {
-        AlertDialog.Builder(this, R.style.Theme_PhoneWheel_Dialog)
-            .setTitle("Desconectar")
-            .setMessage("Deseja realmente desconectar?")
-            .setPositiveButton("Desconectar") { _, _ ->
-                disconnectAndFinish()
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun disconnectAndFinish() {
-        releaseAllControls()
-        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-            ConnectionHolder.connectionManager.disconnect()
-        }
-        finish()
     }
 
     // -------------------------------------------------------------------------
@@ -199,9 +197,9 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         if (settingsOverlay != null) return
 
         val overlay = SettingsOverlayView(this).apply {
-            callback = this@ControllerActivity
+            callback = this@PreviewControllerActivity
             // Sincroniza estado atual
-            invertWheel = this@ControllerActivity.wheelInverted
+            invertWheel = this@PreviewControllerActivity.wheelInverted
             invertLeftX = binding.leftStick.invertX
             invertLeftY = binding.leftStick.invertY
             invertRightX = binding.rightStick.invertX
@@ -228,7 +226,7 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     }
 
     // -------------------------------------------------------------------------
-    // SettingsOverlayView.Callback
+    // SettingsOverlayView.Callback — configurações afetam apenas estado local
     // -------------------------------------------------------------------------
 
     override fun onSettingsClose() {
@@ -275,7 +273,7 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     }
 
     // -------------------------------------------------------------------------
-    // Modo Volante
+    // Modo Volante — funciona localmente, sem envio UDP
     // -------------------------------------------------------------------------
 
     private fun setupWheelMode() {
@@ -288,19 +286,6 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         setWheelModeEnabled(false)
     }
 
-    /**
-     * Alterna entre o layout gamepad e o layout volante.
-     *
-     * Quando [enabled] = true e ainda estamos no layout gamepad:
-     *   - Troca para o layout volante (activity_controller_wheel)
-     *   - Re-configura todos os controles no novo layout
-     *   - Inicia o giroscópio
-     *
-     * Quando [enabled] = false e estamos no layout volante:
-     *   - Volta para o layout gamepad (activity_controller)
-     *   - Re-configura todos os controles no layout original
-     *   - Para o giroscópio
-     */
     private fun setWheelModeEnabled(enabled: Boolean) {
         wheelModeEnabled = enabled
 
@@ -313,14 +298,6 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
             // Volta para layout gamepad
             switchToGamepadLayout()
             stopWheelMode()
-
-        } else {
-            // Mesmo layout, apenas atualiza o estado visual
-            binding.leftStick.wheelMode = enabled
-            binding.steeringPanel.visibility = if (enabled) View.VISIBLE else View.GONE
-            binding.textWheelModeState.text = getString(
-                if (enabled) R.string.wheel_mode_on else R.string.wheel_mode_off
-            )
         }
     }
 
@@ -330,63 +307,38 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
      * desde que o layout volante tenha todos os mesmos IDs de view.
      */
     private fun switchToWheelLayout() {
-        // Esconde o overlay de configurações se estiver visível
         hideSettingsOverlay()
 
-        // Infla o layout volante e vincula ao binding existente
         val wheelRoot = layoutInflater.inflate(R.layout.activity_controller_wheel, null)
         binding = ActivityControllerBinding.bind(wheelRoot)
         setContentView(binding.root)
         isWheelLayoutActive = true
 
-        // Re-configura tudo para o novo layout
         applySavedSettings()
         setupWheelControls()
         setupGearButton()
-        setupDisconnectButton()
+        setupBackButton()
         setupRecenterButton()
         setupWheelModeSwitch()
-        updateConnectionUi(ConnectionHolder.connectionManager.getConnectionState())
+        showPreviewIndicator()
     }
 
     /**
      * Troca o content view para o layout gamepad e re-configura os controles.
      */
     private fun switchToGamepadLayout() {
-        // Esconde o overlay de configurações se estiver visível
         hideSettingsOverlay()
 
-        // Infla o layout gamepad
         binding = ActivityControllerBinding.inflate(layoutInflater)
         setContentView(binding.root)
         isWheelLayoutActive = false
 
-        // Re-configura tudo para o layout original
         applySavedSettings()
         setupControls()
         setupGearButton()
-        setupDisconnectButton()
+        setupBackButton()
         setupWheelModeSwitch()
-        updateConnectionUi(ConnectionHolder.connectionManager.getConnectionState())
-    }
-
-    /**
-     * Configura os controles específicos do layout volante.
-     * Chama [setupControls] para configurar todos os controles comuns
-     * e então ativa o modo volante no leftStick.
-     */
-    private fun setupWheelControls() {
-        setupControls()
-        binding.leftStick.wheelMode = true
-    }
-
-    /**
-     * Configura o botão de recenter no layout volante.
-     */
-    private fun setupRecenterButton() {
-        binding.buttonRecenter.setOnClickListener {
-            recenterWheel()
-        }
+        showPreviewIndicator()
     }
 
     /**
@@ -394,26 +346,9 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
      * Remove listeners antigos, define o estado visual e re-adiciona o listener.
      */
     private fun setupWheelModeSwitch() {
-        // Remove listener anterior para evitar chamadas indesejadas
         binding.switchWheelMode.setOnCheckedChangeListener(null)
-
-        // Define o estado visual sem disparar o listener
         binding.switchWheelMode.isChecked = wheelModeEnabled
-
-        // Atualiza o texto de estado
-        binding.textWheelModeState.text = getString(
-            if (wheelModeEnabled) R.string.wheel_mode_on else R.string.wheel_mode_off
-        )
-
-        // Define o estado do leftStick
         binding.leftStick.wheelMode = wheelModeEnabled
-
-        // Visibilidade do steering panel (apenas no layout gamepad)
-        if (!isWheelLayoutActive) {
-            binding.steeringPanel.visibility = if (wheelModeEnabled) View.VISIBLE else View.GONE
-        }
-
-        // Re-adiciona o listener
         binding.switchWheelMode.setOnCheckedChangeListener { _, isChecked ->
             setWheelModeEnabled(isChecked)
         }
@@ -457,10 +392,6 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         updateWheelUi(0f)
     }
 
-    /**
-     * Desativa o modo volante e exibe uma mensagem de erro.
-     * Se estiver no layout volante, volta para o layout gamepad.
-     */
     private fun disableWheelModeWithMessage(messageRes: Int) {
         wheelModeEnabled = false
         gyroscopeManager?.stopListening()
@@ -476,9 +407,6 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
             binding.switchWheelMode.setOnCheckedChangeListener { _, isChecked ->
                 setWheelModeEnabled(isChecked)
             }
-            binding.leftStick.wheelMode = false
-            binding.steeringPanel.visibility = View.GONE
-            binding.textWheelModeState.text = getString(R.string.wheel_mode_off)
         }
 
         Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
@@ -490,12 +418,18 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         updateWheelUi(0f)
     }
 
+    /**
+     * Atualiza a interface do volante localmente.
+     *
+     * Diferente da [ControllerActivity], NÃO chama axisSender.send() —
+     * este método apenas atualiza os elementos visuais para demonstração.
+     */
     private fun updateWheelUi(normalizedValue: Float) {
         val clamped = normalizedValue.coerceIn(-1f, 1f)
         val output = if (wheelInverted) -clamped else clamped
         if (wheelModeEnabled) {
             binding.leftStick.setWheelValue(output)
-            axisSender.send(StickId.LEFT.xAxis, output)
+            // NO axisSender.send() — preview only (no network)
         }
         binding.steeringWheel.setAngle(output * 450f)
         binding.steeringIndicator.setValue(output)
@@ -505,35 +439,6 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
-
-    private fun releaseAllControls() {
-        if (controlsReleased) return
-        controlsReleased = true
-
-        if (wheelModeEnabled) {
-            wheelModeEnabled = false
-            binding.leftStick.wheelMode = false
-            gyroscopeManager?.stopListening()
-            gyroscopeManager?.removeOnSensorDataChangedListener()
-        }
-
-        val buttonSender = ConnectionHolder.buttonSender
-        for (buttonId in 0..9) {
-            buttonSender.release(buttonId)
-        }
-        for (buttonId in 10..13) {
-            buttonSender.release(buttonId)
-        }
-        for (buttonId in 14..15) {
-            buttonSender.release(buttonId)
-        }
-
-        val axisSender = ConnectionHolder.axisSender
-        axisSender.sendCenter(StickId.LEFT.xAxis)
-        axisSender.sendCenter(StickId.LEFT.yAxis)
-        axisSender.sendCenter(StickId.RIGHT.xAxis)
-        axisSender.sendCenter(StickId.RIGHT.yAxis)
-    }
 
     override fun onResume() {
         super.onResume()
@@ -558,7 +463,7 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         super.onDestroy()
         hideSettingsOverlay()
         gyroscopeManager?.cleanup()
-        releaseAllControls()
+        // NO releaseAllControls() — senders are null, nothing to release on the network
     }
 
     @Suppress("DEPRECATION")
@@ -568,25 +473,5 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         } else {
             super.onBackPressed()
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // UI de conexão
-    // -------------------------------------------------------------------------
-
-    private fun updateConnectionUi(state: ConnectionState) {
-        val (statusText, statusColor) = when (state) {
-            ConnectionState.CONNECTED ->
-                getString(R.string.status_connected) to ContextCompat.getColor(this, R.color.status_connected)
-            ConnectionState.CONNECTING ->
-                getString(R.string.status_connecting) to ContextCompat.getColor(this, R.color.status_connecting)
-            ConnectionState.CONNECTION_LOST ->
-                getString(R.string.status_lost) to ContextCompat.getColor(this, R.color.status_lost)
-            ConnectionState.DISCONNECTED ->
-                getString(R.string.status_disconnected) to ContextCompat.getColor(this, R.color.status_disconnected)
-        }
-
-        binding.textViewConnectionStatus.text = statusText
-        binding.statusDot.background.setTint(statusColor)
     }
 }

@@ -27,6 +27,11 @@
                     android:exported="false"
                     android:screenOrientation="sensorLandscape" />
 
+                <activity
+                    android:name=".ui.PreviewControllerActivity"
+                    android:exported="false"
+                    android:screenOrientation="sensorLandscape" />
+
     </application>
 
 </manifest>

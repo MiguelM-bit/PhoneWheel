@@ -178,6 +178,28 @@ public class ViGEmController : IVirtualController
                         return;
                     }
 
+                    // Triggers digitais (14=LT, 15=RT): mapear para eixos de trigger do Xbox 360.
+                    // Quando pressionado → valor máximo (255); quando liberado → 0.
+                    // Estes são tratados como estados digitais, não analógicos.
+                    if (button is 14 or 15)
+                    {
+                        try
+                        {
+                            if (_controller == null) return;
+
+                            var slider = button == 14 ? Xbox360Slider.LeftTrigger : Xbox360Slider.RightTrigger;
+                            var value = pressed ? byte.MaxValue : byte.MinValue;
+                            _controller.SetSliderValue(slider, value);
+                        }
+                        catch (Exception ex)
+                        {
+                            _status = VirtualControllerStatus.Error;
+                            throw new VirtualControllerException(
+                                $"Erro ao definir trigger: {ex.Message}", ex);
+                        }
+                        return;
+                    }
+
                     // Mapear índice de botão genérico para o botão Xbox 360 correspondente.
                     var xboxButton = button switch
                     {

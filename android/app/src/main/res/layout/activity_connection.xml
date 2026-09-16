@@ -152,6 +152,19 @@
                         android:text="@string/button_disconnect"
                         app:cornerRadius="12dp" />
                 </LinearLayout>
+
+                <!-- Preview button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonPreview"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:minHeight="48dp"
+                    android:text="@string/button_preview"
+                    android:textColor="@color/text_secondary"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    app:icon="@android:drawable/ic_media_play"
+                    app:iconTint="@color/text_secondary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

@@ -41,6 +41,14 @@ class VirtualAnalogStick @JvmOverloads constructor(
              */
             var wheelMode: Boolean = false
 
+        /**
+         * Inversão de eixos: quando ativado, inverte o sinal do eixo correspondente.
+         * X invertido transforma esquerda ↔ direita.
+         * Y invertido transforma cima ↔ baixo.
+         */
+        var invertX: Boolean = false
+        var invertY: Boolean = false
+
             private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
             private val model = AnalogStickModel()
 
@@ -132,8 +140,10 @@ class VirtualAnalogStick @JvmOverloads constructor(
         val cx = width / 2f
         val cy = height / 2f
         if (model.update(touchX - cx, touchY - cy)) {
-            axisSender?.send(stickId.xAxis, model.x)
-            axisSender?.send(stickId.yAxis, model.y)
+            val sendX = if (invertX) -model.x else model.x
+            val sendY = if (invertY) -model.y else model.y
+            axisSender?.send(stickId.xAxis, sendX)
+            axisSender?.send(stickId.yAxis, sendY)
             invalidate()
         }
     }

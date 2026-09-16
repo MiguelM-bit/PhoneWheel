@@ -171,7 +171,7 @@ public class VJoyController : IVirtualController
                             $"Falha ao adquirir o dispositivo vJoy {_deviceId}.");
                     }
 
-                    // O gamepad virtual usa 10 botões (A/B/X/Y/LB/RB/LS/RS/Back/Start),
+                    // O gamepad virtual usa 16 botões (A/B/X/Y/LB/RB/LS/RS/Back/Start/LT/RT),
                                         // o D-pad via POV hat e os eixos X/Y/Rx/Ry. A configuração é
                                         // validada de forma NÃO-bloqueante: o controle conecta mesmo
                                         // incompleto, e botões/eixos existentes funcionam. Avisos são
@@ -179,18 +179,20 @@ public class VJoyController : IVirtualController
                                         _configurationWarnings.Clear();
 
                                         // --- Botões ---
-                                        // O gamepad usa 10 botões (IDs 0-9):
-                                        //   0-7:  A, B, X, Y, LB, RB, LS, RS
-                                        //   8-9:  Back, Start
+                                        // O gamepad usa 16 botões (IDs 0-15):
+                                        //   0-7:   A, B, X, Y, LB, RB, LS, RS
+                                        //   8-9:   Back, Start
+                                        //   10-13: D-pad (UP/DOWN/LEFT/RIGHT) — mapeados via POV hat
+                                        //   14:    LT (botão digital)
+                                        //   15:    RT (botão digital)
                                         // O D-pad (UP/DOWN/LEFT/RIGHT) usa POV hat, não botões.
                                         var buttonCount = _controller.ButtonCount;
-                                        if (buttonCount < 10)
+                                        if (buttonCount < 16)
                                         {
                                             _configurationWarnings.Add(
                                                 $"Dispositivo vJoy {_deviceId} possui apenas {buttonCount} botões. " +
-                                                "A/B/X/Y/LB/RB/LS/RS (protocolo 0-7 → botões vJoy 1-8) funcionam, mas " +
-                                                "Back (protocolo 8 → botão vJoy 9) e Start (protocolo 9 → botão vJoy 10) " +
-                                                "não existirão. No 'Configure vJoy', defina o número de botões para pelo menos 10.");
+                                                "A/LT/RT (protocolo 0-15 → botões vJoy 1-16) não funcionarão completamente. " +
+                                                "No 'Configure vJoy', defina o número de botões para pelo menos 16.");
                                         }
 
                                         // --- Eixos ---
@@ -392,7 +394,7 @@ public class VJoyController : IVirtualController
                                     {
                                         throw new VirtualControllerException(
                                             $"Falha ao definir botão {button} (vJoy {vjoyButton}) do vJoy {_deviceId}. " +
-                                            "Verifique se o dispositivo possui pelo menos 10 botões no 'Configure vJoy'.");
+                                            "Verifique se o dispositivo possui pelo menos 16 botões no 'Configure vJoy'.");
                                     }
                                 }
                 catch (VirtualControllerException)

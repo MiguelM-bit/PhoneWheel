@@ -245,7 +245,7 @@ Enviado pelo Android quando o usuário pressiona ou libera um botão. Permite ac
 | Campo       | Tipo   | Descrição                                                                 |
 |-------------|--------|---------------------------------------------------------------------------|
 | `type`      | string | Sempre `"button"` para pacotes de evento de botão                         |
-| `button`    | int    | Identificador lógico do botão (0 = A, 1 = B, 2 = X, 3 = Y, 4 = LB, 5 = RB, 6 = LS, 7 = RS, 8 = Back, 9 = Start, 10 = DPadUp, 11 = DPadDown, 12 = DPadLeft, 13 = DPadRight) |
+| `button`    | int    | Identificador lógico do botão (0 = A, 1 = B, 2 = X, 3 = Y, 4 = LB, 5 = RB, 6 = LS, 7 = RS, 8 = Back, 9 = Start, 10 = DPadUp, 11 = DPadDown, 12 = DPadLeft, 13 = DPadRight, 14 = LT, 15 = RT) |
 | `pressed`   | bool   | `true` para pressionado, `false` para liberado                            |
 | `timestamp` | long   | Timestamp local do Android em milissegundos                               |
 
@@ -255,8 +255,8 @@ Enviado pelo Android quando o usuário pressiona ou libera um botão. Permite ac
 2. **Windows** valida que o cliente está autenticado (handshake `connect` concluído) antes de processar.
 3. **Windows** encaminha o evento ao controle virtual (`SetButton(button, pressed)`).
 4. O mapeamento do identificador lógico para o botão físico depende do backend:
-   - **vJoy**: o identificador é usado diretamente como índice de botão do dispositivo.
-   - **Xbox 360 (ViGEmBus)**: 0-13 mapeiam para A, B, X, Y, LB, RB, LS, RS, Back, Start, DPadUp, DPadDown, DPadLeft, DPadRight.
+   - **vJoy**: o identificador é usado diretamente como índice de botão do dispositivo (1-based: ID 0 → botão vJoy 1, etc.).
+   - **Xbox 360 (ViGEmBus)**: 0-13 mapeiam para A, B, X, Y, LB, RB, LS, RS, Back, Start, DPadUp, DPadDown, DPadLeft, DPadRight. 14-15 (LT/RT) são mapeados para os eixos de trigger (LeftTrigger/RightTrigger) como estados digitais (0 ou 255).
 5. Botões fora do intervalo suportado são rejeitados pelo Windows (log de erro, sem derrubar o servidor).
 
 > **Nota**: O pacote `button` também conta como "pacote recebido" para o watchdog de conexão, mantendo a conexão ativa mesmo sem pacotes de steering.

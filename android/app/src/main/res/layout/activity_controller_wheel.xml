@@ -13,11 +13,11 @@
         android:layout_height="match_parent"
         android:orientation="horizontal">
 
-        <!-- ===== LEFT COLUMN (35%) ===== -->
+        <!-- ===== LEFT COLUMN (25%) ===== -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="35"
+            android:layout_weight="25"
             android:orientation="vertical"
             android:gravity="center"
             android:padding="8dp">
@@ -26,14 +26,14 @@
             <com.phonewheel.ui.controls.VirtualButton
                 android:id="@+id/buttonLT"
                 android:layout_width="match_parent"
-                android:layout_height="60dp"
+                android:layout_height="56dp"
                 android:layout_margin="4dp" />
 
             <!-- LB shoulder button -->
             <com.phonewheel.ui.controls.VirtualButton
                 android:id="@+id/buttonLB"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="44dp"
                 android:layout_margin="4dp" />
 
             <!-- Spacer -->
@@ -45,8 +45,8 @@
             <!-- D-Pad -->
             <com.phonewheel.ui.controls.VirtualDPad
                 android:id="@+id/dpad"
-                android:layout_width="160dp"
-                android:layout_height="160dp"
+                android:layout_width="140dp"
+                android:layout_height="140dp"
                 android:layout_gravity="center"
                 android:layout_margin="4dp" />
 
@@ -56,34 +56,28 @@
                 android:layout_height="0dp"
                 android:layout_weight="1" />
 
-            <!-- Left Stick + LS row -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+            <!-- Hidden views required for binding compatibility -->
+            <com.phonewheel.ui.controls.VirtualButton
+                android:id="@+id/buttonLS"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone"
+                tools:ignore="VisualClickability" />
 
-                <com.phonewheel.ui.controls.VirtualButton
-                    android:id="@+id/buttonLS"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:layout_margin="4dp" />
-
-                <com.phonewheel.ui.controls.VirtualAnalogStick
-                    android:id="@+id/leftStick"
-                    android:layout_width="160dp"
-                    android:layout_height="160dp"
-                    android:layout_gravity="center"
-                    android:layout_margin="4dp" />
-            </LinearLayout>
+            <com.phonewheel.ui.controls.VirtualAnalogStick
+                android:id="@+id/leftStick"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone"
+                tools:ignore="VisualClickability" />
 
         </LinearLayout>
 
-        <!-- ===== CENTER COLUMN (30%) ===== -->
+        <!-- ===== CENTER COLUMN (50%) ===== -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="30"
+            android:layout_weight="50"
             android:orientation="vertical"
             android:gravity="center"
             android:padding="8dp">
@@ -130,25 +124,51 @@
                 android:layout_height="0dp"
                 android:layout_weight="1" />
 
-            <!-- Back + Start row -->
-            <LinearLayout
+            <!-- Steering Wheel (main element - large) -->
+            <com.phonewheel.ui.SteeringWheelView
+                android:id="@+id/steeringWheel"
+                android:layout_width="180dp"
+                android:layout_height="180dp"
+                android:layout_gravity="center" />
+
+            <!-- Steering Indicator -->
+            <com.phonewheel.ui.SteeringIndicatorView
+                android:id="@+id/steeringIndicator"
+                android:layout_width="200dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:layout_marginTop="8dp" />
+
+            <!-- Wheel value text -->
+            <TextView
+                android:id="@+id/textWheelValue"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center">
+                android:layout_gravity="center"
+                android:layout_marginTop="4dp"
+                android:text="0.00"
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
-                <com.phonewheel.ui.controls.VirtualButton
-                    android:id="@+id/buttonBack"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:layout_margin="10dp" />
+            <!-- Recenter button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonRecenter"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:minWidth="0dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:layout_marginTop="8dp"
+                android:text="@string/button_recenter"
+                android:textSize="13sp"
+                style="@style/Widget.MaterialComponents.Button.TextButton" />
 
-                <com.phonewheel.ui.controls.VirtualButton
-                    android:id="@+id/buttonStart"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:layout_margin="10dp" />
-            </LinearLayout>
+            <!-- Spacer -->
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
             <!-- Settings gear button -->
             <com.google.android.material.button.MaterialButton
@@ -163,104 +183,48 @@
                 android:textSize="13sp"
                 style="@style/Widget.MaterialComponents.Button.TextButton" />
 
-            <!-- Spacer -->
-            <View
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
-            <!-- Steering panel (hidden by default) -->
+            <!-- Hidden views required for binding compatibility -->
             <LinearLayout
                 android:id="@+id/steeringPanel"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
                 android:visibility="gone"
-                tools:visibility="visible">
+                tools:ignore="VisualClickability" />
 
-                <com.phonewheel.ui.SteeringWheelView
-                    android:id="@+id/steeringWheel"
-                    android:layout_width="100dp"
-                    android:layout_height="100dp"
-                    android:layout_gravity="center" />
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/switchWheelMode"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone"
+                tools:ignore="VisualClickability" />
 
-                <com.phonewheel.ui.SteeringIndicatorView
-                    android:id="@+id/steeringIndicator"
-                    android:layout_width="140dp"
-                    android:layout_height="24dp"
-                    android:layout_gravity="center"
-                    android:layout_marginTop="4dp" />
+            <TextView
+                android:id="@+id/textWheelModeState"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone"
+                tools:ignore="VisualClickability" />
 
-                <TextView
-                    android:id="@+id/textWheelValue"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:layout_marginTop="2dp"
-                    android:text="0.00"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonInvertWheel"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone"
+                tools:ignore="VisualClickability" />
 
-            <!-- Wheel mode controls row -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
+            <com.phonewheel.ui.controls.VirtualButton
+                android:id="@+id/buttonBack"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone"
+                tools:ignore="VisualClickability" />
 
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switchWheelMode"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/wheel_mode"
-                    android:textColor="@color/text_primary"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/textWheelModeState"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="4dp"
-                    android:text="@string/wheel_mode_off"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="11sp" />
-            </LinearLayout>
-
-            <!-- Wheel mode action buttons row -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:layout_marginTop="4dp">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/buttonRecenter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="32dp"
-                    android:minWidth="0dp"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:text="@string/button_recenter"
-                    android:textSize="12sp"
-                    style="@style/Widget.MaterialComponents.Button.TextButton" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/buttonInvertWheel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="32dp"
-                    android:minWidth="0dp"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:text="Inverter"
-                    android:textSize="12sp"
-                    style="@style/Widget.MaterialComponents.Button.TextButton" />
-            </LinearLayout>
+            <com.phonewheel.ui.controls.VirtualButton
+                android:id="@+id/buttonStart"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone"
+                tools:ignore="VisualClickability" />
 
             <!-- Spacer -->
             <View
@@ -270,11 +234,11 @@
 
         </LinearLayout>
 
-        <!-- ===== RIGHT COLUMN (35%) ===== -->
+        <!-- ===== RIGHT COLUMN (25%) ===== -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="35"
+            android:layout_weight="25"
             android:orientation="vertical"
             android:gravity="center"
             android:padding="8dp">
@@ -283,14 +247,14 @@
             <com.phonewheel.ui.controls.VirtualButton
                 android:id="@+id/buttonRT"
                 android:layout_width="match_parent"
-                android:layout_height="60dp"
+                android:layout_height="56dp"
                 android:layout_margin="4dp" />
 
             <!-- RB shoulder button -->
             <com.phonewheel.ui.controls.VirtualButton
                 android:id="@+id/buttonRB"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="44dp"
                 android:layout_margin="4dp" />
 
             <!-- Spacer -->
@@ -315,15 +279,15 @@
 
                     <com.phonewheel.ui.controls.VirtualButton
                         android:id="@+id/buttonX"
-                        android:layout_width="68dp"
-                        android:layout_height="68dp"
-                        android:layout_margin="8dp" />
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:layout_margin="6dp" />
 
                     <com.phonewheel.ui.controls.VirtualButton
                         android:id="@+id/buttonY"
-                        android:layout_width="68dp"
-                        android:layout_height="68dp"
-                        android:layout_margin="8dp" />
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:layout_margin="6dp" />
                 </LinearLayout>
 
                 <!-- Bottom row: A, B -->
@@ -335,15 +299,15 @@
 
                     <com.phonewheel.ui.controls.VirtualButton
                         android:id="@+id/buttonA"
-                        android:layout_width="68dp"
-                        android:layout_height="68dp"
-                        android:layout_margin="8dp" />
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:layout_margin="6dp" />
 
                     <com.phonewheel.ui.controls.VirtualButton
                         android:id="@+id/buttonB"
-                        android:layout_width="68dp"
-                        android:layout_height="68dp"
-                        android:layout_margin="8dp" />
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:layout_margin="6dp" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -362,15 +326,15 @@
 
                 <com.phonewheel.ui.controls.VirtualAnalogStick
                     android:id="@+id/rightStick"
-                    android:layout_width="160dp"
-                    android:layout_height="160dp"
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
                     android:layout_gravity="center"
                     android:layout_margin="4dp" />
 
                 <com.phonewheel.ui.controls.VirtualButton
                     android:id="@+id/buttonRS"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
                     android:layout_margin="4dp" />
             </LinearLayout>
 

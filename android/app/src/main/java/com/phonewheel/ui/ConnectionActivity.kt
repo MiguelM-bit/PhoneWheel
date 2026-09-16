@@ -100,6 +100,9 @@ class ConnectionActivity : AppCompatActivity() {
         binding.buttonConnect.setOnClickListener { onConnectClicked() }
         binding.buttonDisconnect.setOnClickListener { onDisconnectClicked() }
         binding.buttonDiscover.setOnClickListener { onDiscoverClicked() }
+        binding.buttonPreview?.setOnClickListener {
+            startActivity(Intent(this, PreviewControllerActivity::class.java))
+        }
 
         lifecycleScope.launch {
             connectionManager.connectionState.collect { state ->

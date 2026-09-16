@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using System.Windows.Threading;
 using PhoneWheel.Server.Connection;
+using PhoneWheel.Server.Models;
 using PhoneWheel.Server.Network;
 using PhoneWheel.Server.Services;
 using PhoneWheel.Server.UI.Configuration;
@@ -303,6 +304,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         engine.LogMessage += OnLogMessage;
         engine.SteeringProcessed += OnSteeringProcessed;
+        engine.AxisProcessed += OnAxisProcessed;
         engine.ConnectionStateChanged += OnConnectionStateChanged;
         engine.ClientConnected += OnClientConnected;
         engine.InvalidPacketReceived += OnInvalidPacketReceived;
@@ -314,6 +316,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         engine.LogMessage -= OnLogMessage;
         engine.SteeringProcessed -= OnSteeringProcessed;
+        engine.AxisProcessed -= OnAxisProcessed;
         engine.ConnectionStateChanged -= OnConnectionStateChanged;
         engine.ClientConnected -= OnClientConnected;
         engine.InvalidPacketReceived -= OnInvalidPacketReceived;
@@ -387,6 +390,23 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             NormalizedText = result.NormalizedValue.HasValue ? $"{result.NormalizedValue:F4}" : "—";
             GyroText = $"{result.ReceivedGyro:F4} rad/s";
             WheelAngle = result.CalibratedAngle ?? result.ReceivedAngle;
+        });
+    }
+
+    private void OnAxisProcessed(object? sender, AxisProcessedEventArgs e)
+    {
+        // O Modo Volante do Android envia o eixo esquerdo X (left_x) para controlar
+        // a direção. Atualiza a animação do volante com a mesma escala usada no
+        // Android (binding.steeringWheel.setAngle(output * 450f)).
+        if (e.AxisId != AxisId.LeftStickX)
+        {
+            return;
+        }
+
+        RunOnUi(() =>
+        {
+            WheelAngle = e.Value * 450;
+            NormalizedText = $"{e.Value:F4}";
         });
     }
 

@@ -246,6 +246,15 @@ public class ViGEmController : IVirtualController
             // Limitar a [-1.0, 1.0]
             var clampedValue = Math.Clamp(value, -1.0, 1.0);
 
+            // Inversão do eixo Y para ViGEm (Xbox 360 / XInput).
+            // O app Android usa convenção DirectInput: up = -1.0, down = +1.0.
+            // O XInput espera o oposto: up = +32767, down = -32768.
+            // Portanto, negamos o valor dos eixos Y antes do mapeamento.
+            if (axis is AxisId.LeftStickY or AxisId.RightStickY)
+            {
+                clampedValue = -clampedValue;
+            }
+
             try
             {
                 if (_controller == null)

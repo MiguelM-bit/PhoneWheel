@@ -36,6 +36,18 @@ public class SteeringProcessedEventArgs : EventArgs
 }
 
 /// <summary>
+/// Argumentos do evento de pacote de eixo processado.
+/// </summary>
+public class AxisProcessedEventArgs : EventArgs
+{
+    public required string ClientIp { get; init; }
+
+    public required AxisId AxisId { get; init; }
+
+    public required double Value { get; init; }
+}
+
+/// <summary>
 /// Argumentos do evento de cliente conectado (handshake CONNECT).
 /// </summary>
 public class ClientConnectedEventArgs : EventArgs
@@ -80,6 +92,9 @@ public class ServerEngine : IDisposable
 
     /// <summary>Evento disparado quando um pacote de direção é processado pela pipeline.</summary>
     public event EventHandler<SteeringProcessedEventArgs>? SteeringProcessed;
+
+    /// <summary>Evento disparado quando um pacote de eixo é processado.</summary>
+    public event EventHandler<AxisProcessedEventArgs>? AxisProcessed;
 
     /// <summary>Evento disparado quando o estado da conexão muda (conectado/desconectado).</summary>
     public event EventHandler<ConnectionStatus>? ConnectionStateChanged;
@@ -264,8 +279,9 @@ public class ServerEngine : IDisposable
             _watchdog = null;
         }
 
-                // Liberar botões pressionados antes de desconectar o controle virtual
+                // Liberar botões e eixos antes de desconectar o controle virtual
                 ReleaseAllButtons();
+                ReleaseAllAxes();
 
                 // Desconectar o controle virtual
         try
@@ -367,13 +383,14 @@ public class ServerEngine : IDisposable
         }
     }
 
-    private void OnWatchdogConnectionLost(object? sender, ConnectionLostEventArgs args)
-    {
-        Log(EngineLogLevel.Warning, "Conexão perdida! Nenhum pacote recebido por {0} ms", args.ElapsedMilliseconds);
-        Log(EngineLogLevel.Info, "Volante centralizado (segurança)");
-            ReleaseAllButtons();
-            ConnectionStateChanged?.Invoke(this, ConnectionStatus.Disconnected);
-        }
+private void OnWatchdogConnectionLost(object? sender, ConnectionLostEventArgs args)
+        {
+            Log(EngineLogLevel.Warning, "Conexão perdida! Nenhum pacote recebido por {0} ms", args.ElapsedMilliseconds);
+            Log(EngineLogLevel.Info, "Volante centralizado (segurança)");
+                ReleaseAllButtons();
+                ReleaseAllAxes();
+                ConnectionStateChanged?.Invoke(this, ConnectionStatus.Disconnected);
+            }
 
     private void OnWatchdogConnectionRestored(object? sender, ConnectionRestoredEventArgs args)
     {
@@ -598,6 +615,12 @@ public class ServerEngine : IDisposable
             if (AxisPacket.TryGetAxisId(args.Packet.Axis, out var axisId))
             {
                 _virtualController.SetAxis(axisId, args.Packet.Value);
+                AxisProcessed?.Invoke(this, new AxisProcessedEventArgs
+                {
+                    ClientIp = ipKey,
+                    AxisId = axisId,
+                    Value = args.Packet.Value
+                });
                 Log(EngineLogLevel.Info, "Eixo {0} = {1:F3} de {2}",
                     args.Packet.Axis, args.Packet.Value, ipKey);
             }
@@ -664,6 +687,40 @@ public class ServerEngine : IDisposable
             if (released > 0)
             {
                 Log(EngineLogLevel.Info, "Botões pressionados liberados ({0})", released);
+            }
+        }
+
+        /// <summary>
+        /// Libera todos os eixos (analogicos e triggers) no controle virtual, colocando-os em posição neutra (0.0).
+        /// Usado quando a conexão é perdida ou o servidor é encerrado,
+        /// para evitar que os eixos fiquem em posições inesperadas.
+        /// </summary>
+        private void ReleaseAllAxes()
+        {
+            var axesToRelease = new[]
+            {
+                AxisId.LeftStickX,
+                AxisId.LeftStickY,
+                AxisId.RightStickX,
+                AxisId.RightStickY,
+                AxisId.LeftTrigger,
+                AxisId.RightTrigger
+            };
+
+            foreach (var axis in axesToRelease)
+            {
+                try
+                {
+                    _virtualController.SetAxis(axis, 0.0);
+                }
+                catch (VirtualControllerException ex)
+                {
+                    Log(EngineLogLevel.Warning, "Falha ao liberar eixo {0}: {1}", axis, ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    Log(EngineLogLevel.Warning, "Erro ao liberar eixo {0}: {1}", axis, ex.Message);
+                }
             }
         }
 

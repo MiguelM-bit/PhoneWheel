@@ -40,10 +40,11 @@ class VirtualButton @JvmOverloads constructor(
 
     private var activePointerId = MotionEvent.INVALID_POINTER_ID
 
-    private val baseColor = Color.rgb(43, 43, 43)      // #2B2B2B
-    private val pressedColor = Color.rgb(229, 57, 53)  // #E53935
-    private val borderColor = Color.rgb(58, 58, 58)    // #3A3A3A
-    private val textColor = Color.rgb(224, 224, 224)   // #E0E0E0
+    private val baseColor = Color.rgb(35, 35, 35)        // #232323 - darker, cleaner
+    private val pressedColor = Color.rgb(229, 57, 53)    // #E53935 - red accent
+    private val borderColor = Color.rgb(60, 60, 60)      // #3C3C3C - subtle border
+    private val pressedBorderColor = Color.rgb(229, 57, 53) // #E53935 - red border when pressed
+    private val textColor = Color.rgb(224, 224, 224)     // #E0E0E0
 
     /**
      * Estado atual do botão (para leitura externa, ex.: testes).
@@ -117,27 +118,37 @@ class VirtualButton @JvmOverloads constructor(
 
         val cx = width / 2f
         val cy = height / 2f
-        val radius = min(width, height) / 2f - 4f
+        val radius = min(width, height) / 2f - 2f
         if (radius <= 0f) return
 
         val pressed = tracker.isPressed(buttonId)
 
-        // Círculo de fundo
+        // Visual radius: 90% when pressed (scale down), full size when not pressed
+        val visualRadius = if (pressed) radius * 0.9f else radius
+
+        // Outer glow ring when pressed (subtle semi-transparent circle behind)
+        if (pressed) {
+            paint.style = Paint.Style.FILL
+            paint.color = Color.argb(40, 229, 57, 53) // semi-transparent red glow
+            canvas.drawCircle(cx, cy, radius * 1.05f, paint)
+        }
+
+        // Main circle
         paint.style = Paint.Style.FILL
         paint.color = if (pressed) pressedColor else baseColor
-        canvas.drawCircle(cx, cy, radius, paint)
+        canvas.drawCircle(cx, cy, visualRadius, paint)
 
-        // Borda
+        // Border
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f
-        paint.color = borderColor
-        canvas.drawCircle(cx, cy, radius, paint)
+        paint.strokeWidth = if (pressed) 3f else 2f
+        paint.color = if (pressed) pressedBorderColor else borderColor
+        canvas.drawCircle(cx, cy, visualRadius, paint)
 
-        // Rótulo
+        // Label
         if (label.isNotEmpty()) {
             paint.style = Paint.Style.FILL
-            paint.color = textColor
-            paint.textSize = radius * 0.6f
+            paint.color = if (pressed) Color.WHITE else textColor
+            paint.textSize = radius * 0.65f
             paint.textAlign = Paint.Align.CENTER
             val baseline = cy - (paint.descent() + paint.ascent()) / 2f
             canvas.drawText(label, cx, baseline, paint)

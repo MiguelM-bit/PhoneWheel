@@ -9,6 +9,7 @@ import androidx.lifecycle.lifecycleScope
 import com.phonewheel.R
 import com.phonewheel.connection.ConnectionHolder
 import com.phonewheel.databinding.ActivityControllerBinding
+import com.phonewheel.model.StickAxis
 import com.phonewheel.model.StickId
 import com.phonewheel.network.ConnectionState
 import com.phonewheel.sensor.GyroscopeManager
@@ -43,9 +44,12 @@ class ControllerActivity : AppCompatActivity() {
     private val buttonSender get() = ConnectionHolder.buttonSender
     private val axisSender get() = ConnectionHolder.axisSender
 
+    private var controlsReleased = false
+
         // Modo Volante: reutiliza GyroscopeManager + SteeringPipeline (que compõe
             // os gerenciadores existentes). Nulos quando o modo está desativado.
             private var wheelModeEnabled = false
+            private var wheelInverted = false
             private var gyroscopeManager: GyroscopeManager? = null
             private var steeringPipeline: SteeringPipeline? = null
 
@@ -69,14 +73,19 @@ class ControllerActivity : AppCompatActivity() {
                 binding.buttonDisconnect.setOnClickListener {
             // Libera estados ativos antes de encerrar a conexão.
             releaseAllControls()
-            // Escopo independente: garante que os releases e o disconnect() sejam
-            // concluídos mesmo com a activity finalizando (finish() cancela o
-            // lifecycleScope, o que interromperia o releaseAll() no meio do envio).
+            // Escopo independente: garante que o disconnect() seja
+            // concluído mesmo com a activity finalizando (finish() cancela o
+            // lifecycleScope).
             CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-                ConnectionHolder.buttonSender.releaseAll()
                 connectionManager.disconnect()
             }
             finish()
+        }
+
+        binding.buttonInvertWheel.setOnClickListener {
+            wheelInverted = !wheelInverted
+            binding.buttonInvertWheel.text = if (wheelInverted) "Invertido" else "Inverter"
+            updateWheelUi(steeringPipeline?.getNormalizedValue() ?: 0f)
         }
 
         lifecycleScope.launch {
@@ -123,117 +132,147 @@ class ControllerActivity : AppCompatActivity() {
             // Modo Volante
             // ---------------------------------------------------------------------
 
-            private fun setupWheelMode() {
-                binding.switchWheelMode.setOnCheckedChangeListener { _, isChecked ->
-                    setWheelModeEnabled(isChecked)
-                }
-                binding.buttonRecenter.setOnClickListener {
-                    recenterWheel()
-                }
-                // Estado inicial: desativado (analógico esquerdo funciona normalmente).
-                setWheelModeEnabled(false)
+        private fun setupWheelMode() {
+            binding.switchWheelMode.setOnCheckedChangeListener { _, isChecked ->
+                setWheelModeEnabled(isChecked)
+            }
+            binding.buttonRecenter.setOnClickListener {
+                recenterWheel()
+            }
+            // Estado inicial: desativado (analógico esquerdo funciona normalmente).
+            setWheelModeEnabled(false)
+        }
+
+        private fun setWheelModeEnabled(enabled: Boolean) {
+            wheelModeEnabled = enabled
+            binding.leftStick.wheelMode = enabled
+            binding.steeringPanel.visibility = if (enabled) View.VISIBLE else View.GONE
+            binding.textWheelModeState.text = getString(
+                if (enabled) R.string.wheel_mode_on else R.string.wheel_mode_off
+            )
+
+            if (enabled) {
+                startWheelMode()
+            } else {
+                stopWheelMode()
+            }
+        }
+
+        private fun startWheelMode() {
+            if (gyroscopeManager == null) {
+                gyroscopeManager = GyroscopeManager(this)
+            }
+            if (steeringPipeline == null) {
+                steeringPipeline = SteeringPipeline()
+            }
+            val gyro = gyroscopeManager ?: return
+            val pipeline = steeringPipeline ?: return
+
+            if (!gyro.hasGyroscope()) {
+                disableWheelModeWithMessage(R.string.wheel_mode_no_gyro)
+                return
             }
 
-            private fun setWheelModeEnabled(enabled: Boolean) {
-                wheelModeEnabled = enabled
-                binding.leftStick.wheelMode = enabled
-                binding.steeringPanel.visibility = if (enabled) View.VISIBLE else View.GONE
-                binding.textWheelModeState.text = getString(
-                    if (enabled) R.string.wheel_mode_on else R.string.wheel_mode_off
-                )
+            // Recentraliza ao ativar: o volante começa no centro.
+            pipeline.recenter()
+            updateWheelUi(0f)
 
-                if (enabled) {
-                    startWheelMode()
-                } else {
-                    stopWheelMode()
-                }
+            // Callback do giroscópio (registrado na main thread → UI segura).
+            gyro.setOnSensorDataChangedListener { x, y, z ->
+                pipeline.processGyroscopeData(x, y, z)
+                updateWheelUi(pipeline.getNormalizedValue())
             }
-
-            private fun startWheelMode() {
-                if (gyroscopeManager == null) {
-                    gyroscopeManager = GyroscopeManager(this)
-                }
-                if (steeringPipeline == null) {
-                    steeringPipeline = SteeringPipeline()
-                }
-                val gyro = gyroscopeManager ?: return
-                val pipeline = steeringPipeline ?: return
-
-                if (!gyro.hasGyroscope()) {
-                    disableWheelModeWithMessage(R.string.wheel_mode_no_gyro)
-                    return
-                }
-
-                // Recentraliza ao ativar: o volante começa no centro.
-                pipeline.recenter()
-                updateWheelUi(0f)
-
-                // Callback do giroscópio (registrado na main thread → UI segura).
-                gyro.setOnSensorDataChangedListener { x, y, z ->
-                    pipeline.processGyroscopeData(x, y, z)
-                    updateWheelUi(pipeline.getNormalizedValue())
-                }
-                try {
-                    gyro.startListening()
-                } catch (e: SensorNotAvailableException) {
-                    disableWheelModeWithMessage(R.string.wheel_mode_no_gyro)
-                }
+            try {
+                gyro.startListening()
+            } catch (e: SensorNotAvailableException) {
+                disableWheelModeWithMessage(R.string.wheel_mode_no_gyro)
             }
+        }
 
-            private fun stopWheelMode() {
-                gyroscopeManager?.stopListening()
-                gyroscopeManager?.removeOnSensorDataChangedListener()
-                // Restaura o analógico esquerdo ao centro.
-                binding.leftStick.reset()
-                updateWheelUi(0f)
+        private fun stopWheelMode() {
+            gyroscopeManager?.stopListening()
+            gyroscopeManager?.removeOnSensorDataChangedListener()
+            // Restaura o analógico esquerdo ao centro.
+            binding.leftStick.reset()
+            updateWheelUi(0f)
+        }
+
+        private fun disableWheelModeWithMessage(messageRes: Int) {
+            binding.switchWheelMode.isChecked = false
+            Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
+        }
+
+        /**
+         * Recentraliza o volante: a orientação atual passa a ser o centro e o
+         * valor normalizado retorna imediatamente para 0.0.
+         */
+        private fun recenterWheel() {
+            val pipeline = steeringPipeline ?: return
+            pipeline.recenter()
+            updateWheelUi(0f)
+        }
+
+        /**
+         * Atualiza a UI com o valor FINAL produzido pelo SteeringPipeline
+         * (normalizado em [-1.0, +1.0]).
+         */
+        private fun updateWheelUi(normalizedValue: Float) {
+            val clamped = normalizedValue.coerceIn(-1f, 1f)
+            val output = if (wheelInverted) -clamped else clamped
+            // Atualiza o analógico esquerdo apenas no Modo Volante (visual + envio do eixo X).
+            // Fora do Modo Volante, o analógico é controlado pelo toque e não deve ser
+            // alterado por valores residuais do pipeline (ex.: botão Inverter), senão o
+            // modelo do stick fica em estado inconsistente e o analógico parece "morto".
+            if (wheelModeEnabled) {
+                binding.leftStick.setWheelValue(output)
+                axisSender.send(StickId.LEFT.xAxis, output)
             }
+            // Atualiza a UI do volante
+            binding.steeringWheel.setAngle(output * 450f)
+            binding.steeringIndicator.setValue(output)
+            binding.textWheelValue.text = String.format("%.2f", output)
+        }
 
-            private fun disableWheelModeWithMessage(messageRes: Int) {
-                binding.switchWheelMode.isChecked = false
-                Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
-            }
-
-            /**
-             * Recentraliza o volante: a orientação atual passa a ser o centro e o
-             * valor normalizado retorna imediatamente para 0.0.
-             */
-            private fun recenterWheel() {
-                val pipeline = steeringPipeline ?: return
-                pipeline.recenter()
-                updateWheelUi(0f)
-            }
-
-            /**
-             * Atualiza a UI com o valor FINAL produzido pelo SteeringPipeline
-             * (normalizado em [-1.0, +1.0]).
-             */
-            private fun updateWheelUi(normalizedValue: Float) {
-                val clamped = normalizedValue.coerceIn(-1f, 1f)
-                // O volante gira conforme o ângulo acumulado (range ±450°).
-                binding.steeringWheel.setAngle(clamped * 450f)
-                binding.steeringIndicator.setValue(clamped)
-                binding.textWheelValue.text = String.format("%.2f", clamped)
-                binding.leftStick.setWheelValue(clamped)
-            }
-
-    /**
-     * Libera todos os controles ativos: solta botões, centraliza analógicos e
-     * limpa os estados visuais antes de sair da tela.
-     */
+/**
+      * Libera todos os controles ativos: solta botões, centraliza analógicos e
+      * limpa os estados visuais antes de sair da tela.
+      * Usa diretamente os senders existentes para garantir que os pacotes sejam
+      * enviados mesmo que a atividade esteja sendo finalizada.
+      */
     private fun releaseAllControls() {
-        binding.dpad.releaseAll()
-        binding.leftStick.reset()
-        binding.rightStick.reset()
-        binding.buttonA.release()
-        binding.buttonB.release()
-        binding.buttonX.release()
-        binding.buttonY.release()
-        binding.buttonLB.release()
-        binding.buttonRB.release()
-        binding.buttonLS.release()
-        binding.buttonRS.release()
-        binding.buttonBack.release()
-        binding.buttonStart.release()
+        // Disconnect/lifecycle callbacks can invoke this more than once. The
+        // sender state makes button releases idempotent, but axis centers are
+        // intentionally unconditional, so guard the whole operation.
+        if (controlsReleased) return
+        controlsReleased = true
+
+        // Stop wheel mode without calling stopWheelMode(), which would send a
+        // duplicate center packet for the left stick before the explicit reset
+        // below.
+        if (wheelModeEnabled) {
+            wheelModeEnabled = false
+            binding.leftStick.wheelMode = false
+            gyroscopeManager?.stopListening()
+            gyroscopeManager?.removeOnSensorDataChangedListener()
+        }
+
+        // Libera todos os botões usando ButtonSender existente
+        val buttonSender = ConnectionHolder.buttonSender
+        // Botões individuais: A=0, B=1, X=2, Y=3, LB=4, RB=5, LS=6, RS=7, Back=8, Start=9
+        for (buttonId in 0..9) {
+            buttonSender.release(buttonId)
+        }
+        // Direções do D-pad: UP=10, DOWN=11, LEFT=12, RIGHT=13
+        for (buttonId in 10..13) {
+            buttonSender.release(buttonId)
+        }
+
+        // Centraliza todos os eixos usando AxisSender existente
+        val axisSender = ConnectionHolder.axisSender
+        axisSender.sendCenter(StickId.LEFT.xAxis)
+        axisSender.sendCenter(StickId.LEFT.yAxis)
+        axisSender.sendCenter(StickId.RIGHT.xAxis)
+        axisSender.sendCenter(StickId.RIGHT.yAxis)
     }
 
     override fun onResume() {

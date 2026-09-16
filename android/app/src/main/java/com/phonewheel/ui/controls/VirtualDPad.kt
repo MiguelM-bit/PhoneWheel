@@ -36,10 +36,11 @@ class VirtualDPad @JvmOverloads constructor(
     private val pointerTracker = DPadPointerTracker()
     private val buttonTracker = ButtonStateTracker()
 
-    private val baseColor = Color.rgb(43, 43, 43)      // #2B2B2B
-    private val activeColor = Color.rgb(229, 57, 53)   // #E53935
-    private val borderColor = Color.rgb(58, 58, 58)    // #3A3A3A
-    private val textColor = Color.rgb(224, 224, 224)   // #E0E0E0
+    private val baseColor = Color.rgb(35, 35, 35)         // #232323 - darker, cleaner
+    private val activeColor = Color.rgb(229, 57, 53)      // #E53935 - red accent
+    private val borderColor = Color.rgb(60, 60, 60)       // #3C3C3C - subtle border
+    private val activeBorderColor = Color.rgb(255, 82, 82) // #FF5252 - brighter red border for active
+    private val textColor = Color.rgb(224, 224, 224)      // #E0E0E0
 
     /**
      * Direções atualmente pressionadas (para leitura externa, ex.: testes).
@@ -130,64 +131,98 @@ class VirtualDPad @JvmOverloads constructor(
         val radius = min(width, height) / 2f
         if (radius <= 0f) return
 
-        val armWidth = radius * 0.5f
+        val armWidth = radius * 0.45f
         val armLength = radius * 0.95f
+        val cornerRadius = armWidth / 2f
 
-        // Cruz base (barra horizontal + vertical)
+        // Helper to compute the RectF for a specific direction's arm
+        fun armRect(direction: DPadDirection): RectF = when (direction) {
+            DPadDirection.UP -> RectF(cx - armWidth / 2f, cy - armLength, cx + armWidth / 2f, cy)
+            DPadDirection.DOWN -> RectF(cx - armWidth / 2f, cy, cx + armWidth / 2f, cy + armLength)
+            DPadDirection.LEFT -> RectF(cx - armLength, cy - armWidth / 2f, cx, cy + armWidth / 2f)
+            DPadDirection.RIGHT -> RectF(cx, cy - armWidth / 2f, cx + armLength, cy + armWidth / 2f)
+        }
+
+        fun isPressed(dir: DPadDirection) = buttonTracker.isPressed(dir.buttonId)
+
+        // --- Layer 1: Outer glow for active directions (subtle red halo behind arms) ---
+        val glowSize = armWidth * 0.12f
         paint.style = Paint.Style.FILL
+        for (dir in DPadDirection.entries) {
+            if (isPressed(dir)) {
+                paint.color = Color.argb(50, 229, 57, 53) // subtle transparent red
+                val rect = armRect(dir)
+                canvas.drawRoundRect(
+                    RectF(
+                        rect.left - glowSize, rect.top - glowSize,
+                        rect.right + glowSize, rect.bottom + glowSize
+                    ),
+                    cornerRadius + glowSize, cornerRadius + glowSize, paint
+                )
+            }
+        }
+
+        // --- Layer 2: Base cross fill (horizontal + vertical bars) ---
         paint.color = baseColor
         canvas.drawRoundRect(
             RectF(cx - armLength, cy - armWidth / 2f, cx + armLength, cy + armWidth / 2f),
-            armWidth / 2f, armWidth / 2f, paint
+            cornerRadius, cornerRadius, paint
         )
         canvas.drawRoundRect(
             RectF(cx - armWidth / 2f, cy - armLength, cx + armWidth / 2f, cy + armLength),
-            armWidth / 2f, armWidth / 2f, paint
+            cornerRadius, cornerRadius, paint
         )
 
-        // Destaque das direções ativas
+        // --- Layer 3: Active direction fills (higher opacity/saturation) ---
         paint.color = activeColor
-        if (buttonTracker.isPressed(DPadDirection.UP.buttonId)) {
-            canvas.drawRoundRect(
-                RectF(cx - armWidth / 2f, cy - armLength, cx + armWidth / 2f, cy),
-                armWidth / 2f, armWidth / 2f, paint
-            )
-        }
-        if (buttonTracker.isPressed(DPadDirection.DOWN.buttonId)) {
-            canvas.drawRoundRect(
-                RectF(cx - armWidth / 2f, cy, cx + armWidth / 2f, cy + armLength),
-                armWidth / 2f, armWidth / 2f, paint
-            )
-        }
-        if (buttonTracker.isPressed(DPadDirection.LEFT.buttonId)) {
-            canvas.drawRoundRect(
-                RectF(cx - armLength, cy - armWidth / 2f, cx, cy + armWidth / 2f),
-                armWidth / 2f, armWidth / 2f, paint
-            )
-        }
-        if (buttonTracker.isPressed(DPadDirection.RIGHT.buttonId)) {
-            canvas.drawRoundRect(
-                RectF(cx, cy - armWidth / 2f, cx + armLength, cy + armWidth / 2f),
-                armWidth / 2f, armWidth / 2f, paint
-            )
+        for (dir in DPadDirection.entries) {
+            if (isPressed(dir)) {
+                canvas.drawRoundRect(armRect(dir), cornerRadius, cornerRadius, paint)
+            }
         }
 
-        // Borda da cruz
+        // --- Layer 4: Inner highlight for active directions (subtle lighter shade) ---
+        val highlightInset = armWidth * 0.15f
+        val highlightRadius = maxOf(0f, cornerRadius - highlightInset)
+        paint.color = Color.argb(55, 255, 170, 170) // subtle pinkish-white overlay
+        for (dir in DPadDirection.entries) {
+            if (isPressed(dir)) {
+                val rect = armRect(dir)
+                canvas.drawRoundRect(
+                    RectF(
+                        rect.left + highlightInset, rect.top + highlightInset,
+                        rect.right - highlightInset, rect.bottom - highlightInset
+                    ),
+                    highlightRadius, highlightRadius, paint
+                )
+            }
+        }
+
+        // --- Layer 5: Base border (stroke 2f, subtle borderColor) ---
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 2f
         paint.color = borderColor
         canvas.drawRoundRect(
             RectF(cx - armLength, cy - armWidth / 2f, cx + armLength, cy + armWidth / 2f),
-            armWidth / 2f, armWidth / 2f, paint
+            cornerRadius, cornerRadius, paint
         )
         canvas.drawRoundRect(
             RectF(cx - armWidth / 2f, cy - armLength, cx + armWidth / 2f, cy + armLength),
-            armWidth / 2f, armWidth / 2f, paint
+            cornerRadius, cornerRadius, paint
         )
 
-        // Setas indicadoras
+        // --- Layer 6: Active arm borders (stroke 3f, brighter activeBorderColor) ---
+        paint.strokeWidth = 3f
+        paint.color = activeBorderColor
+        for (dir in DPadDirection.entries) {
+            if (isPressed(dir)) {
+                canvas.drawRoundRect(armRect(dir), cornerRadius, cornerRadius, paint)
+            }
+        }
+
+        // --- Layer 7: Arrow indicators ---
         paint.style = Paint.Style.FILL
-        paint.textSize = armWidth * 0.5f
+        paint.textSize = armWidth * 0.55f
         paint.textAlign = Paint.Align.CENTER
         paint.color = textColor
         val arrowBaseline = cy - (paint.descent() + paint.ascent()) / 2f

@@ -49,11 +49,13 @@ class VirtualAnalogStick @JvmOverloads constructor(
     private var baseRadius = 0f
     private var knobRadius = 0f
 
-    private val baseColor = Color.rgb(43, 43, 43)      // #2B2B2B
-    private val baseBorderColor = Color.rgb(58, 58, 58) // #3A3A3A
-    private val knobColor = Color.rgb(58, 58, 58)      // #3A3A3A
-    private val knobActiveColor = Color.rgb(229, 57, 53) // #E53935
-    private val knobBorderColor = Color.rgb(74, 74, 74) // #4A4A4A
+    private val baseColor = Color.rgb(30, 30, 30)
+    private val baseBorderColor = Color.rgb(55, 55, 55)
+    private val knobColor = Color.rgb(65, 65, 65)
+    private val knobActiveColor = Color.rgb(229, 57, 53)
+    private val knobBorderColor = Color.rgb(80, 80, 80)
+    private val centerDotColor = Color.rgb(80, 80, 80)
+    private val activeBorderColor = Color.rgb(255, 82, 82)
 
     /**
      * Valores normalizados atuais (para leitura externa, ex.: testes).
@@ -66,8 +68,8 @@ class VirtualAnalogStick @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        baseRadius = min(w, h) / 2f * 0.9f
-        knobRadius = baseRadius * 0.35f
+        baseRadius = min(w, h) / 2f * 0.92f
+        knobRadius = baseRadius * 0.32f
         // O knob percorre a base sem ultrapassar a borda.
         model.radius = baseRadius - knobRadius
     }
@@ -137,20 +139,26 @@ class VirtualAnalogStick @JvmOverloads constructor(
     }
 
     private fun centerStick() {
-        if (model.center()) {
-            axisSender?.sendCenter(stickId.xAxis)
-            axisSender?.sendCenter(stickId.yAxis)
-            invalidate()
-        }
+        model.center()
+        axisSender?.sendCenter(stickId.xAxis)
+        axisSender?.sendCenter(stickId.yAxis)
+        invalidate()
     }
 
         /**
          * Centraliza o analógico e limpa o ponteiro ativo.
          * Usado ao sair da tela/desconectar para não deixar o eixo "preso".
+         *
+         * Envia pacotes de centro independentemente do estado atual do modelo,
+         * garantindo que o [AxisSender] resete o filtro e que o servidor receba
+         * o valor centralizado (importante ao sair do Modo Volante, por exemplo).
          */
         fun reset() {
-            centerStick()
+            model.center()
+            axisSender?.sendCenter(stickId.xAxis)
+            axisSender?.sendCenter(stickId.yAxis)
             activePointerId = MotionEvent.INVALID_POINTER_ID
+            invalidate()
         }
 
     override fun performClick(): Boolean {
@@ -165,6 +173,16 @@ class VirtualAnalogStick @JvmOverloads constructor(
         val cy = height / 2f
         if (baseRadius <= 0f) return
 
+        val active = activePointerId != MotionEvent.INVALID_POINTER_ID
+
+        // Outer active ring (subtle, when finger is touching)
+        if (active) {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 3f
+            paint.color = Color.argb(77, 229, 57, 53) // knobActiveColor at ~30% opacity
+            canvas.drawCircle(cx, cy, baseRadius + 4f, paint)
+        }
+
         // Base circular
         paint.style = Paint.Style.FILL
         paint.color = baseColor
@@ -173,7 +191,7 @@ class VirtualAnalogStick @JvmOverloads constructor(
         // Borda da base (vermelha no Modo Volante)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 2f
-                paint.color = if (wheelMode) knobActiveColor else baseBorderColor
+        paint.color = if (wheelMode) knobActiveColor else baseBorderColor
         canvas.drawCircle(cx, cy, baseRadius, paint)
 
         // Guias cruzadas
@@ -186,15 +204,19 @@ class VirtualAnalogStick @JvmOverloads constructor(
         // Knob
         val knobX = cx + model.x * model.radius
         val knobY = cy + model.y * model.radius
-        val active = activePointerId != MotionEvent.INVALID_POINTER_ID
 
         paint.style = Paint.Style.FILL
-                paint.color = if (active) knobActiveColor else if (wheelMode) knobActiveColor else knobColor
+        paint.color = if (active) knobActiveColor else if (wheelMode) knobActiveColor else knobColor
         canvas.drawCircle(knobX, knobY, knobRadius, paint)
 
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f
-        paint.color = knobBorderColor
+        paint.strokeWidth = 3f
+        paint.color = if (active) activeBorderColor else knobBorderColor
         canvas.drawCircle(knobX, knobY, knobRadius, paint)
+
+        // Center dot
+        paint.style = Paint.Style.FILL
+        paint.color = if (active) knobActiveColor else centerDotColor
+        canvas.drawCircle(cx, cy, 3f, paint)
     }
 }

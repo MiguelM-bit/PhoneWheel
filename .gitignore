@@ -1,0 +1,94 @@
+# Compiled files
+*.class
+*.o
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Android
+android/build/
+android/.gradle/
+android/.idea/
+android/*.iml
+android/local.properties
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+android/lint.xml
+android/*.keystore
+android/*.jks
+android/.DS_Store
+
+# Windows / C#
+windows/**/bin/
+windows/**/obj/
+windows/.vs/
+windows/.vscode/
+windows/**/*.user
+windows/*.sln.iml
+windows/packages/
+windows/NuGetPackages/
+windows/*.nupkg
+windows/.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+.env
+.env.local
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Node (se usado futuramente)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Python (se usado futuramente)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Build outputs
+dist/
+build/
+out/
+
+# Dependencies
+.gradle/
+.maven/
+.ivy2/
+
+# OpenCode (config local com API keys e agentes/plugins)
+.opencode/
+opencode.json
+
+# Miscellaneous
+*.md.bak
+TODO.txt
+NOTES.txt

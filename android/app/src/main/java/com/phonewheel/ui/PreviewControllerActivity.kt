@@ -8,6 +8,9 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.phonewheel.R
 import com.phonewheel.databinding.ActivityControllerBinding
 import com.phonewheel.model.StickId
@@ -44,14 +47,34 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
     private var gyroscopeManager: GyroscopeManager? = null
     private var steeringPipeline: SteeringPipeline? = null
 
+    // lifecycle guard — evita releases duplicados
+    private var controlsReleased = false
+
     // settings overlay
     private var settingsOverlay: SettingsOverlayView? = null
+
+    /**
+     * Ativa modo imersivo: esconde status bar e navigation bar.
+     * Usa WindowInsetsControllerCompat para compatibilidade.
+     * O usuário pode acessar as barras fazendo swipe das bordas.
+     */
+    private fun enableImmersiveMode() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+        windowInsetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         binding = ActivityControllerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Ativa modo imersivo para tela cheia
+        enableImmersiveMode()
 
         settings = SettingsManager(this)
 
@@ -437,11 +460,61 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
     }
 
     // -------------------------------------------------------------------------
+    // Release — libera todos os controles visuais e o giroscópio
+    // -------------------------------------------------------------------------
+
+    /**
+     * Libera todos os controles visuais: zera botões, centraliza analógicos,
+     * para o giroscópio e reseta o DPad.
+     *
+     * Diferente da [ControllerActivity], NÃO há senders de rede —
+     * aqui apenas limpamos o estado visual para evitar "botões presos"
+     * quando a Activity retorna do background.
+     */
+    private fun releaseAllControls() {
+        if (controlsReleased) return
+        controlsReleased = true
+
+        if (wheelModeEnabled) {
+            wheelModeEnabled = false
+            binding.leftStick.wheelMode = false
+            gyroscopeManager?.stopListening()
+            gyroscopeManager?.removeOnSensorDataChangedListener()
+        }
+
+        // Zera todos os botões visualmente (senders são null, nada para enviar)
+        binding.buttonA.release()
+        binding.buttonB.release()
+        binding.buttonX.release()
+        binding.buttonY.release()
+        binding.buttonLB.release()
+        binding.buttonRB.release()
+        binding.buttonLS.release()
+        binding.buttonRS.release()
+        binding.buttonBack.release()
+        binding.buttonStart.release()
+        binding.buttonLT.release()
+        binding.buttonRT.release()
+
+        // Centraliza analógicos
+        binding.leftStick.reset()
+        binding.rightStick.reset()
+
+        // Libera DPad
+        binding.dpad.releaseAll()
+    }
+
+    // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
 
     override fun onResume() {
         super.onResume()
+        // Reseta o flag para permitir releases futuros
+        controlsReleased = false
+        // Restaura modo imersivo quando a Activity retorna do background
+        enableImmersiveMode()
+        
         if (wheelModeEnabled) {
             val gyro = gyroscopeManager
             if (gyro != null && gyro.hasGyroscope()) {
@@ -454,6 +527,11 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        releaseAllControls()
+    }
+
     override fun onPause() {
         super.onPause()
         gyroscopeManager?.stopListening()
@@ -463,7 +541,7 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
         super.onDestroy()
         hideSettingsOverlay()
         gyroscopeManager?.cleanup()
-        // NO releaseAllControls() — senders are null, nothing to release on the network
+        releaseAllControls()
     }
 
     @Suppress("DEPRECATION")

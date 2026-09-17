@@ -25,12 +25,14 @@
                 <activity
                     android:name=".ui.ControllerActivity"
                     android:exported="false"
-                    android:screenOrientation="sensorLandscape" />
+                    android:screenOrientation="sensorLandscape"
+                    android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
 
                 <activity
                     android:name=".ui.PreviewControllerActivity"
                     android:exported="false"
-                    android:screenOrientation="sensorLandscape" />
+                    android:screenOrientation="sensorLandscape"
+                    android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
 
     </application>
 

@@ -8,6 +8,9 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.phonewheel.R
 import com.phonewheel.connection.ConnectionHolder
@@ -63,11 +66,28 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     // Settings overlay
     private var settingsOverlay: SettingsOverlayView? = null
 
+    /**
+     * Ativa modo imersivo: esconde status bar e navigation bar.
+     * Usa WindowInsetsControllerCompat para compatibilidade.
+     * O usuário pode acessar as barras fazendo swipe das bordas.
+     */
+    private fun enableImmersiveMode() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+        windowInsetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         binding = ActivityControllerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Ativa modo imersivo para tela cheia
+        enableImmersiveMode()
 
         settings = SettingsManager(this)
 
@@ -537,6 +557,11 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
 
     override fun onResume() {
         super.onResume()
+        // Reseta o flag para permitir releases futuros
+        controlsReleased = false
+        // Restaura modo imersivo quando a Activity retorna do background
+        enableImmersiveMode()
+        
         if (wheelModeEnabled) {
             val gyro = gyroscopeManager
             if (gyro != null && gyro.hasGyroscope()) {
@@ -547,6 +572,11 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
                 }
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        releaseAllControls()
     }
 
     override fun onPause() {

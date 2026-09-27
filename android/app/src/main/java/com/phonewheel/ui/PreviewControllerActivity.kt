@@ -2,6 +2,8 @@ package com.phonewheel.ui
 
 import android.graphics.Color
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -13,6 +15,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.phonewheel.R
 import com.phonewheel.databinding.ActivityControllerBinding
+import com.phonewheel.input.GamepadController
 import com.phonewheel.model.StickId
 import com.phonewheel.sensor.GyroscopeManager
 import com.phonewheel.sensor.SensorNotAvailableException
@@ -53,6 +56,10 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
     // settings overlay
     private var settingsOverlay: SettingsOverlayView? = null
 
+    private val gamepadController by lazy {
+        GamepadController(this, { binding })
+    }
+
     /**
      * Ativa modo imersivo: esconde status bar e navigation bar.
      * Usa WindowInsetsControllerCompat para compatibilidade.
@@ -85,6 +92,7 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
         setupWheelMode()
         setupBackButton()
         setupGearButton()
+        gamepadController.start()
 
         // Show preview indicator
         showPreviewIndicator()
@@ -219,6 +227,8 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
     private fun showSettingsOverlay() {
         if (settingsOverlay != null) return
 
+        gamepadController.pauseCapture()
+
         val overlay = SettingsOverlayView(this).apply {
             callback = this@PreviewControllerActivity
             // Sincroniza estado atual
@@ -254,6 +264,7 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
 
     override fun onSettingsClose() {
         hideSettingsOverlay()
+        gamepadController.resumeCapture()
     }
 
     override fun onRecenterWheel() {
@@ -344,6 +355,7 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
         setupRecenterButton()
         setupWheelModeSwitch()
         showPreviewIndicator()
+        gamepadController.refresh()
     }
 
     /**
@@ -362,6 +374,7 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
         setupBackButton()
         setupWheelModeSwitch()
         showPreviewIndicator()
+        gamepadController.refresh()
     }
 
     /**
@@ -502,6 +515,7 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
 
         // Libera DPad
         binding.dpad.releaseAll()
+        gamepadController.pauseCapture()
     }
 
     // -------------------------------------------------------------------------
@@ -514,7 +528,10 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
         controlsReleased = false
         // Restaura modo imersivo quando a Activity retorna do background
         enableImmersiveMode()
-        
+        if (settingsOverlay == null) {
+            gamepadController.resumeCapture()
+        }
+
         if (wheelModeEnabled) {
             val gyro = gyroscopeManager
             if (gyro != null && gyro.hasGyroscope()) {
@@ -542,6 +559,17 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
         hideSettingsOverlay()
         gyroscopeManager?.cleanup()
         releaseAllControls()
+        gamepadController.stop()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (gamepadController.handleKeyEvent(event)) return true
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (gamepadController.handleMotionEvent(event)) return true
+        return super.dispatchGenericMotionEvent(event)
     }
 
     @Suppress("DEPRECATION")

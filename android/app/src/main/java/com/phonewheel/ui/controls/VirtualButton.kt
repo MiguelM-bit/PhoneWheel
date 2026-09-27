@@ -39,6 +39,7 @@ class VirtualButton @JvmOverloads constructor(
     private val tracker = ButtonStateTracker()
 
     private var activePointerId = MotionEvent.INVALID_POINTER_ID
+        private var externalPressed = false
 
     private val baseColor = Color.rgb(35, 35, 35)        // #232323 - darker, cleaner
     private val pressedColor = Color.rgb(229, 57, 53)    // #E53935 - red accent
@@ -50,7 +51,7 @@ class VirtualButton @JvmOverloads constructor(
      * Estado atual do botão (para leitura externa, ex.: testes).
      */
         val pressed: Boolean
-        get() = tracker.isPressed(buttonId)
+        get() = tracker.isPressed(buttonId) || externalPressed
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
@@ -105,7 +106,18 @@ class VirtualButton @JvmOverloads constructor(
             if (tracker.isPressed(buttonId)) {
                 setPressedState(false)
             }
+            applyExternalPressed(false)
             activePointerId = MotionEvent.INVALID_POINTER_ID
+        }
+
+        /**
+         * Feedback visual de uma fonte externa (gamepad físico).
+         * Não envia UDP e não interfere no toque.
+         */
+        fun applyExternalPressed(pressed: Boolean) {
+            if (externalPressed == pressed) return
+            externalPressed = pressed
+            invalidate()
         }
 
     override fun performClick(): Boolean {
@@ -121,7 +133,7 @@ class VirtualButton @JvmOverloads constructor(
         val radius = min(width, height) / 2f - 2f
         if (radius <= 0f) return
 
-        val pressed = tracker.isPressed(buttonId)
+        val pressed = tracker.isPressed(buttonId) || externalPressed
 
         // Visual radius: 90% when pressed (scale down), full size when not pressed
         val visualRadius = if (pressed) radius * 0.9f else radius

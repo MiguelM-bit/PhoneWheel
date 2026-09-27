@@ -107,6 +107,16 @@
                     android:textSize="12sp"
                     android:textStyle="bold" />
 
+                <TextView
+                    android:id="@+id/textViewGamepadStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="@string/gamepad_disconnected"
+                    android:textColor="@color/status_connected"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/buttonDisconnect"
                     android:layout_width="wrap_content"

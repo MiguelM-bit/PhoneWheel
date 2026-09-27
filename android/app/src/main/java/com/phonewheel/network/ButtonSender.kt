@@ -18,46 +18,52 @@ import kotlinx.coroutines.launch
  * - Liberar todos os botões de uma vez ([releaseAll]) ao desconectar, para não
  *   deixar um botão "preso" no controle virtual do Windows.
  *
- * O estado de pressionamento é mantido em um [Set] acessado apenas pela thread
- * da UI (eventos de toque), portanto não há concorrência nesse estado.
+ * O estado de pressionamento combina origens (toque e gamepad) com OR
+ * lógico via [ButtonPressMerger], na thread da UI.
  */
 class ButtonSender(
     private val connectionManager: ConnectionManager,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) {
 
-    private val pressedButtons = mutableSetOf<Int>()
+    companion object {
+        const val ORIGIN_TOUCH = "touch"
+        const val ORIGIN_GAMEPAD = "gamepad"
+    }
+
+    private val merger = ButtonPressMerger()
 
     /**
-     * Pressiona o botão [button]. Não envia nada se ele já estiver pressionado.
+     * Pressiona o botão [button] pela origem [origin].
+     * Só envia se nenhuma outra origem já o mantinha pressionado.
      */
-    fun press(button: Int) {
-        if (!pressedButtons.add(button)) return
+    fun press(button: Int, origin: String = ORIGIN_TOUCH) {
+        if (!merger.press(button, origin)) return
         send(button, pressed = true)
     }
 
     /**
-     * Libera o botão [button]. Não envia nada se ele já estiver liberado.
+     * Libera o botão [button] pela origem [origin].
+     * Só envia release se nenhuma outra origem continuar pressionando.
      */
-    fun release(button: Int) {
-        if (!pressedButtons.remove(button)) return
+    fun release(button: Int, origin: String = ORIGIN_TOUCH) {
+        if (!merger.release(button, origin)) return
         send(button, pressed = false)
     }
 
     /**
-         * Libera todos os botões atualmente pressionados e **aguarda o envio**
-         * dos pacotes de release. Deve ser chamado antes de fechar a conexão,
-         * para que o servidor não fique com um botão "preso" no controle virtual.
-         */
-        suspend fun releaseAll() {
-            val pressed = pressedButtons.toList()
-            pressedButtons.clear()
-            for (button in pressed) {
-                connectionManager.sendButtonPacket(
-                    ButtonPacket(button = button, pressed = false)
-                )
-            }
+     * Libera todos os botões atualmente pressionados e **aguarda o envio**
+     * dos pacotes de release. Deve ser chamado antes de fechar a conexão,
+     * para que o servidor não fique com um botão "preso" no controle virtual.
+     */
+    suspend fun releaseAll() {
+        val pressed = merger.clearAll()
+        for (button in pressed) {
+            connectionManager.sendButtonPacket(
+                ButtonPacket(button = button, pressed = false)
+            )
         }
+    }
 
     private fun send(button: Int, pressed: Boolean) {
         scope.launch {

@@ -2,6 +2,8 @@ package com.phonewheel.ui
 
 import android.app.AlertDialog
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -12,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import com.phonewheel.R
 import com.phonewheel.connection.ConnectionHolder
 import com.phonewheel.databinding.ActivityControllerBinding
+import com.phonewheel.input.GamepadController
 import com.phonewheel.model.StickId
 import com.phonewheel.network.ConnectionState
 import com.phonewheel.sensor.GyroscopeManager
@@ -63,6 +66,15 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     // Settings overlay
     private var settingsOverlay: SettingsOverlayView? = null
 
+    private val gamepadController by lazy {
+        GamepadController(
+            this,
+            { binding },
+            ConnectionHolder.buttonSender,
+            ConnectionHolder.axisSender
+        )
+    }
+
     /**
      * Aplica a política de janela do modo controle: landscape travado,
      * tela cheia de jogo, recorte e exclusão de gestos nas bordas.
@@ -100,6 +112,7 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         setupWheelMode()
         setupDisconnectButton()
         setupGearButton()
+        gamepadController.start()
 
         lifecycleScope.launch {
             connectionManager.connectionState.collect { state ->
@@ -253,6 +266,7 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         controlsReleased = false
         applyControllerWindow()
         resumeWheelSensorIfNeeded()
+        gamepadController.resumeCapture()
     }
 
     override fun onRecenterWheel() {
@@ -369,6 +383,7 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         setupRecenterButton()
         setupWheelModeSwitch()
         updateConnectionUi(ConnectionHolder.connectionManager.getConnectionState())
+        gamepadController.refresh()
     }
 
     /**
@@ -392,6 +407,7 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         setupDisconnectButton()
         setupWheelModeSwitch()
         updateConnectionUi(ConnectionHolder.connectionManager.getConnectionState())
+        gamepadController.refresh()
     }
 
     /**
@@ -567,6 +583,8 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         axisSender.sendCenter(StickId.LEFT.yAxis)
         axisSender.sendCenter(StickId.RIGHT.xAxis)
         axisSender.sendCenter(StickId.RIGHT.yAxis)
+
+        gamepadController.pauseCapture()
     }
 
     private fun releaseAllControls() {
@@ -589,6 +607,9 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         controlsReleased = false
         applyControllerWindow()
         resumeWheelSensorIfNeeded()
+        if (settingsOverlay == null) {
+            gamepadController.resumeCapture()
+        }
     }
 
     override fun onPause() {
@@ -606,6 +627,9 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         if (hasFocus) {
             applyControllerWindow()
             resumeWheelSensorIfNeeded()
+            if (settingsOverlay == null) {
+                gamepadController.resumeCapture()
+            }
         } else {
             pauseControllerInputs()
         }
@@ -616,6 +640,17 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         hideSettingsOverlay()
         gyroscopeManager?.cleanup()
         pauseControllerInputs()
+        gamepadController.stop()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (gamepadController.handleKeyEvent(event)) return true
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (gamepadController.handleMotionEvent(event)) return true
+        return super.dispatchGenericMotionEvent(event)
     }
 
     @Suppress("DEPRECATION")

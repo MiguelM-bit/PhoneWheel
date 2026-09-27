@@ -33,8 +33,9 @@ class VirtualDPad @JvmOverloads constructor(
     var sender: ButtonSender? = null
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val pointerTracker = DPadPointerTracker()
-    private val buttonTracker = ButtonStateTracker()
+        private val pointerTracker = DPadPointerTracker()
+        private val buttonTracker = ButtonStateTracker()
+        private val externalDirections = mutableSetOf<DPadDirection>()
 
     private val baseColor = Color.rgb(35, 35, 35)         // #232323 - darker, cleaner
     private val activeColor = Color.rgb(229, 57, 53)      // #E53935 - red accent
@@ -46,7 +47,7 @@ class VirtualDPad @JvmOverloads constructor(
      * Direções atualmente pressionadas (para leitura externa, ex.: testes).
      */
     val pressedDirections: Set<DPadDirection>
-        get() = DPadDirection.entries.filter { buttonTracker.isPressed(it.buttonId) }.toSet()
+        get() = DPadDirection.entries.filter { isVisuallyPressed(it) }.toSet()
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
@@ -116,7 +117,30 @@ class VirtualDPad @JvmOverloads constructor(
         for (direction in pointerTracker.releaseAll()) {
             releaseDirection(direction)
         }
+        clearExternalDirections()
     }
+
+    /**
+     * Feedback visual de uma fonte externa (gamepad físico).
+     * Não envia UDP e não interfere no toque.
+     */
+    fun applyExternalDirection(direction: DPadDirection, pressed: Boolean) {
+        val changed = if (pressed) {
+            externalDirections.add(direction)
+        } else {
+            externalDirections.remove(direction)
+        }
+        if (changed) invalidate()
+    }
+
+    fun clearExternalDirections() {
+        if (externalDirections.isEmpty()) return
+        externalDirections.clear()
+        invalidate()
+    }
+
+    private fun isVisuallyPressed(direction: DPadDirection): Boolean =
+        buttonTracker.isPressed(direction.buttonId) || direction in externalDirections
 
     override fun performClick(): Boolean {
         super.performClick()
@@ -143,7 +167,7 @@ class VirtualDPad @JvmOverloads constructor(
             DPadDirection.RIGHT -> RectF(cx, cy - armWidth / 2f, cx + armLength, cy + armWidth / 2f)
         }
 
-        fun isPressed(dir: DPadDirection) = buttonTracker.isPressed(dir.buttonId)
+        fun isPressed(dir: DPadDirection) = isVisuallyPressed(dir)
 
         // --- Layer 1: Outer glow for active directions (subtle red halo behind arms) ---
         val glowSize = armWidth * 0.12f

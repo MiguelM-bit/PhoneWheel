@@ -74,6 +74,13 @@ class VirtualAnalogStick @JvmOverloads constructor(
         val stickY: Float
         get() = model.y
 
+        /**
+         * True enquanto um toque controla o stick. O gamepad não envia este
+         * eixo enquanto o toque estiver ativo.
+         */
+        val isTouched: Boolean
+            get() = activePointerId != MotionEvent.INVALID_POINTER_ID
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         baseRadius = min(w, h) / 2f * 0.92f
@@ -89,6 +96,21 @@ class VirtualAnalogStick @JvmOverloads constructor(
         fun setWheelValue(normalizedX: Float) {
             val clamped = normalizedX.coerceIn(-1f, 1f)
             if (model.update(clamped * model.radius, 0f)) {
+                invalidate()
+            }
+        }
+
+        /**
+         * Posição visual de uma fonte externa (gamepad físico).
+         * Não envia UDP. Ignora se o toque ou o modo volante controlam o stick.
+         */
+        fun applyExternalPosition(normalizedX: Float, normalizedY: Float) {
+            if (wheelMode) return
+            if (activePointerId != MotionEvent.INVALID_POINTER_ID) return
+            if (model.radius <= 0f) return
+            val dx = normalizedX.coerceIn(-1f, 1f) * model.radius
+            val dy = normalizedY.coerceIn(-1f, 1f) * model.radius
+            if (model.update(dx, dy)) {
                 invalidate()
             }
         }

@@ -19,6 +19,14 @@
         <item name="android:textColorSecondary">@color/text_secondary</item>
     </style>
 
+    <!-- Tema das telas de controle/prévia: recorte e barras transparentes, sem fullscreen legado -->
+    <style name="Theme.PhoneWheel.Controller" parent="Theme.PhoneWheel">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+
     <!-- Tema para diálogos de confirmação -->
     <style name="Theme.PhoneWheel.Dialog" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
         <item name="colorPrimary">@color/accent_red</item>

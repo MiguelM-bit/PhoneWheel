@@ -8,9 +8,6 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.phonewheel.R
 import com.phonewheel.connection.ConnectionHolder
@@ -67,17 +64,17 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     private var settingsOverlay: SettingsOverlayView? = null
 
     /**
-     * Ativa modo imersivo: esconde status bar e navigation bar.
-     * Usa WindowInsetsControllerCompat para compatibilidade.
-     * O usuário pode acessar as barras fazendo swipe das bordas.
+     * Aplica a política de janela do modo controle: landscape travado,
+     * tela cheia de jogo, recorte e exclusão de gestos nas bordas.
+     * Não esconde as barras enquanto o menu de configurações está aberto.
      */
-    private fun enableImmersiveMode() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
-        windowInsetsController.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    private fun applyControllerWindow() {
+        ControllerWindowHelper.lockCurrentLandscape(this)
+        if (settingsOverlay == null) {
+            ControllerWindowHelper.applyImmersiveMode(window)
+        }
+        ControllerWindowHelper.applyCutoutPadding(binding.root)
+        ControllerWindowHelper.applySystemGestureExclusion(binding.root)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,9 +82,7 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
 
         binding = ActivityControllerBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        // Ativa modo imersivo para tela cheia
-        enableImmersiveMode()
+        applyControllerWindow()
 
         settings = SettingsManager(this)
 
@@ -218,6 +213,8 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     private fun showSettingsOverlay() {
         if (settingsOverlay != null) return
 
+        pauseControllerInputs()
+
         val overlay = SettingsOverlayView(this).apply {
             callback = this@ControllerActivity
             // Sincroniza estado atual
@@ -253,6 +250,9 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
 
     override fun onSettingsClose() {
         hideSettingsOverlay()
+        controlsReleased = false
+        applyControllerWindow()
+        resumeWheelSensorIfNeeded()
     }
 
     override fun onRecenterWheel() {
@@ -358,6 +358,8 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         binding = ActivityControllerBinding.bind(wheelRoot)
         setContentView(binding.root)
         isWheelLayoutActive = true
+        controlsReleased = false
+        applyControllerWindow()
 
         // Re-configura tudo para o novo layout
         applySavedSettings()
@@ -380,6 +382,8 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         binding = ActivityControllerBinding.inflate(layoutInflater)
         setContentView(binding.root)
         isWheelLayoutActive = false
+        controlsReleased = false
+        applyControllerWindow()
 
         // Re-configura tudo para o layout original
         applySavedSettings()
@@ -526,25 +530,35 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     // Lifecycle
     // -------------------------------------------------------------------------
 
-    private fun releaseAllControls() {
+    /**
+     * Libera toques ativos e pausa o giroscópio sem desligar o modo volante.
+     * Idempotente. Não desconecta.
+     */
+    private fun pauseControllerInputs() {
         if (controlsReleased) return
         controlsReleased = true
 
-        if (wheelModeEnabled) {
-            wheelModeEnabled = false
-            binding.leftStick.wheelMode = false
-            gyroscopeManager?.stopListening()
-            gyroscopeManager?.removeOnSensorDataChangedListener()
-        }
+        gyroscopeManager?.stopListening()
+
+        binding.buttonA.release()
+        binding.buttonB.release()
+        binding.buttonX.release()
+        binding.buttonY.release()
+        binding.buttonLB.release()
+        binding.buttonRB.release()
+        binding.buttonLS.release()
+        binding.buttonRS.release()
+        binding.buttonBack.release()
+        binding.buttonStart.release()
+        binding.buttonLT.release()
+        binding.buttonRT.release()
+
+        binding.leftStick.reset()
+        binding.rightStick.reset()
+        binding.dpad.releaseAll()
 
         val buttonSender = ConnectionHolder.buttonSender
-        for (buttonId in 0..9) {
-            buttonSender.release(buttonId)
-        }
-        for (buttonId in 10..13) {
-            buttonSender.release(buttonId)
-        }
-        for (buttonId in 14..15) {
+        for (buttonId in 0..15) {
             buttonSender.release(buttonId)
         }
 
@@ -555,40 +569,53 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         axisSender.sendCenter(StickId.RIGHT.yAxis)
     }
 
-    override fun onResume() {
-        super.onResume()
-        // Reseta o flag para permitir releases futuros
-        controlsReleased = false
-        // Restaura modo imersivo quando a Activity retorna do background
-        enableImmersiveMode()
-        
-        if (wheelModeEnabled) {
-            val gyro = gyroscopeManager
-            if (gyro != null && gyro.hasGyroscope()) {
-                try {
-                    gyro.startListening()
-                } catch (e: SensorNotAvailableException) {
-                    // Ignora
-                }
-            }
+    private fun releaseAllControls() {
+        pauseControllerInputs()
+    }
+
+    private fun resumeWheelSensorIfNeeded() {
+        if (!wheelModeEnabled || settingsOverlay != null) return
+        val gyro = gyroscopeManager ?: return
+        if (!gyro.hasGyroscope()) return
+        try {
+            gyro.startListening()
+        } catch (_: SensorNotAvailableException) {
+            // Mantém o modo volante; tenta de novo no próximo resume.
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        releaseAllControls()
+    override fun onResume() {
+        super.onResume()
+        controlsReleased = false
+        applyControllerWindow()
+        resumeWheelSensorIfNeeded()
     }
 
     override fun onPause() {
         super.onPause()
-        gyroscopeManager?.stopListening()
+        pauseControllerInputs()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        pauseControllerInputs()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            applyControllerWindow()
+            resumeWheelSensorIfNeeded()
+        } else {
+            pauseControllerInputs()
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         hideSettingsOverlay()
         gyroscopeManager?.cleanup()
-        releaseAllControls()
+        pauseControllerInputs()
     }
 
     @Suppress("DEPRECATION")

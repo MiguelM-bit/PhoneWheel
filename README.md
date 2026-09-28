@@ -12,8 +12,16 @@ Monorepo que integra um **aplicativo Android** (Kotlin) a um **servidor Windows*
 │  │ Manager      │  │ (integra ângulo) │  │ (JSON/UDP)    │  │
 │  └──────────────┘  └──────────────────┘  └───────┬───────┘  │
 │  ┌──────────────┐  ┌──────────────────┐          │          │
-│  │ UI (10 botões)│→ │ ButtonPacket     │──────────┘          │
-│  │ touch        │  │ (serializer)     │                     │
+│  │ UI Touch     │→ │ ButtonPacket     │──────────┘          │
+│  │ (10 botões)  │  │ (serializer)     │                     │
+│  └──────────────┘  └──────────────────┘                     │
+│  ┌──────────────┐  ┌──────────────────┐          │          │
+│  │ Gamepad Físico│→│ GamepadManager   │→ │ UdpClient     │  │
+│  │ (Bluetooth/USB)│ │ (KeyEvent/MotionEvent)│              │
+│  └──────────────┘  └──────────────────┘  └───────┬───────┘  │
+│  ┌──────────────┐  ┌──────────────────┐          │          │
+│  │ Controller   │←─│ GamepadController│──────────┘          │
+│  │ Screen (Landscape)│ │ (Virtual Sticks/Buttons)│         │
 │  └──────────────┘  └──────────────────┘                     │
 └─────────────────────────────────────────────────────────────┘
                                                     │ UDP :5005
@@ -48,12 +56,14 @@ Monorepo que integra um **aplicativo Android** (Kotlin) a um **servidor Windows*
 PhoneWheel/
 ├── android/                          # Aplicativo Android (Kotlin)
 │   └── app/src/main/java/com/phonewheel/
-│       ├── ui/          # MainActivity (tela, botões, dialog de descoberta)
+│       ├── ui/          # ConnectionActivity, ControllerActivity, PreviewControllerActivity
 │       ├── sensor/      # GyroscopeManager, GyroAxis
 │       ├── steering/    # SteeringProcessor, Calibration/Sensitivity/Deadzone/Smoothing
 │       ├── network/     # UdpClient, PacketSerializer, ServerDiscovery, ConnectionState
 │       ├── connection/  # ConnectionManager (handshake, heartbeat, reconexão)
-│       ├── model/       # SteeringPacket, ConnectionPackets (connect/discover)
+│       ├── model/       # SteeringPacket, ConnectionPackets (connect/discover), AxisPacket, ButtonPacket
+│       ├── input/       # GamepadManager, GamepadController, GamepadDevice, GamepadState, GamepadInput, GamepadAxis, GamepadButton, GamepadHat, GamepadHost, GamepadNetworkBridge, GamepadSendHints, GamepadDiagnostics, GamepadDetector, InputMapper, InputSource
+│       ├── controls/    # Virtual button, stick, d-pad, settings overlay (UI do Controller Screen)
 │       └── settings/    # SettingsManager
 ├── windows/                          # Servidor Windows (C#/.NET)
 │   ├── PhoneWheel.Server/            # Núcleo do servidor (biblioteca + host console)
@@ -62,7 +72,7 @@ PhoneWheel/
 │   │   ├── Network/      # UdpServer, PacketParser, ServerDiscovery
 │   │   ├── Connection/   # ConnectionWatchdog, HandshakeManager, HeartbeatManager
 │   │   ├── Input/        # SteeringProcessor, CalibrationManager
-│   │   ├── VirtualController/  # IVirtualController, VJoyController (simulação)
+│   │   ├── VirtualController/  # IVirtualController, VJoyController, ViGEmController, VirtualControllerFactory, VirtualControllerType
 │   │   ├── Profiles/     # SteeringProfile, ProfileManager
 │   │   ├── UI/           # UIStatusManager
 │   │   └── Models/       # SteeringPacket, ConnectPacket, DiscoverPacket, ...

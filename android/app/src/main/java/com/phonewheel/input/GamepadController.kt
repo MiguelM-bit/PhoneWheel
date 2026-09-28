@@ -14,7 +14,7 @@ import com.phonewheel.network.ButtonSender
 class GamepadController(
     context: Context,
     private val binding: () -> ActivityControllerBinding,
-    buttonSender: ButtonSender? = null,
+    private val buttonSender: ButtonSender? = null,
     axisSender: AxisSender? = null
 ) : GamepadListener {
 
@@ -44,6 +44,10 @@ class GamepadController(
         }
     )
 
+    init {
+        buttonSender?.onReleaseAll = { bridge.resetButtons() }
+    }
+
     fun start() {
         manager.start()
         refresh()
@@ -54,6 +58,7 @@ class GamepadController(
         host.clear()
         host.setConnected(false)
         bridge.releaseAll()
+        buttonSender?.onReleaseAll = null
     }
 
     fun pauseCapture() {

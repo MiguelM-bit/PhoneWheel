@@ -31,7 +31,7 @@ class SettingsManager(context: Context) {
         private const val KEY_INVERT_RIGHT_X = "invert_right_x"
         private const val KEY_INVERT_RIGHT_Y = "invert_right_y"
         private const val KEY_INVERT_WHEEL = "invert_wheel"
-        private const val KEY_WHEEL_SENSITIVITY_LEVEL = "wheel_sensitivity_level"
+        private const val KEY_WHEEL_SENSITIVITY = "wheel_sensitivity"
         private const val KEY_CONFIRM_DISCONNECT = "confirm_disconnect"
         
         private const val DEFAULT_SERVER_IP = "127.0.0.1"
@@ -45,7 +45,9 @@ class SettingsManager(context: Context) {
         private const val DEFAULT_INVERT_RIGHT_X = false
         private const val DEFAULT_INVERT_RIGHT_Y = false
         private const val DEFAULT_INVERT_WHEEL = true
-        private const val DEFAULT_WHEEL_SENSITIVITY_LEVEL = 1  // 0=Low, 1=Normal, 2=High
+        private const val DEFAULT_WHEEL_SENSITIVITY = 2.0f  // More responsive default
+        private const val MIN_WHEEL_SENSITIVITY = 0.5f
+        private const val MAX_WHEEL_SENSITIVITY = 3.0f
         private const val DEFAULT_CONFIRM_DISCONNECT = true
     }
     
@@ -93,24 +95,22 @@ class SettingsManager(context: Context) {
         get() = prefs.getBoolean(KEY_INVERT_WHEEL, DEFAULT_INVERT_WHEEL)
         set(value) = prefs.edit().putBoolean(KEY_INVERT_WHEEL, value).apply()
     
-    var wheelSensitivityLevel: Int
-        get() = prefs.getInt(KEY_WHEEL_SENSITIVITY_LEVEL, DEFAULT_WHEEL_SENSITIVITY_LEVEL)
-        set(value) = prefs.edit().putInt(KEY_WHEEL_SENSITIVITY_LEVEL, value).apply()
-    
+    var wheelSensitivity: Float
+        get() = prefs.getFloat(KEY_WHEEL_SENSITIVITY, DEFAULT_WHEEL_SENSITIVITY)
+            .coerceIn(MIN_WHEEL_SENSITIVITY, MAX_WHEEL_SENSITIVITY)
+        set(value) = prefs.edit()
+            .putFloat(KEY_WHEEL_SENSITIVITY, value.coerceIn(MIN_WHEEL_SENSITIVITY, MAX_WHEEL_SENSITIVITY))
+            .apply()
+
     var confirmDisconnect: Boolean
         get() = prefs.getBoolean(KEY_CONFIRM_DISCONNECT, DEFAULT_CONFIRM_DISCONNECT)
         set(value) = prefs.edit().putBoolean(KEY_CONFIRM_DISCONNECT, value).apply()
-    
+
     /**
-     * Converte o nível de sensibilidade (0=Low, 1=Normal, 2=High) em um valor float.
+     * Obtém o valor de sensibilidade do volante.
      */
-    fun getWheelSensitivityValue(): Float = when (wheelSensitivityLevel) {
-        0 -> 0.5f   // Low
-        1 -> 1.0f   // Normal
-        2 -> 2.0f   // High
-        else -> 1.0f
-    }
-    
+    fun getWheelSensitivityValue(): Float = wheelSensitivity
+
     fun reset() {
         prefs.edit().clear().apply()
     }

@@ -129,6 +129,18 @@ class GamepadNetworkBridgeTest {
     }
 
     @Test
+    fun `resetButtons forgets presses so next apply sends them again`() {
+        val presses = mutableListOf<Int>()
+        val bridge = GamepadNetworkBridge(pressButton = { presses.add(it) })
+
+        bridge.apply(GamepadState(buttons = mapOf(GamepadButton.A to true)))
+        bridge.resetButtons()
+        bridge.apply(GamepadState(buttons = mapOf(GamepadButton.A to true)))
+
+        assertEquals(listOf(0, 0), presses)
+    }
+
+    @Test
     fun `disconnect releases buttons and centers sticks`() {
         val releases = mutableListOf<Int>()
         val axes = mutableListOf<Pair<StickAxis, Float>>()

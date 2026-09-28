@@ -28,7 +28,7 @@ import kotlinx.coroutines.withContext
  * - Timeout configurável
  * - Envio de pacotes steering apenas após handshake bem-sucedido
  */
-class ConnectionManager(
+open class ConnectionManager(
     private val udpClient: UdpClient = UdpClient(),
     private val handshakeTimeoutMs: Long = 5000,
     private val retryIntervalMs: Long = 500,
@@ -126,7 +126,7 @@ class ConnectionManager(
     /**
      * Verifica se está conectado.
      */
-    fun isConnected(): Boolean = _connectionState.value == ConnectionState.CONNECTED
+    open fun isConnected(): Boolean = _connectionState.value == ConnectionState.CONNECTED
 
     /**
      * Obtém o estado atual da conexão.
@@ -147,7 +147,7 @@ class ConnectionManager(
          * Envia um pacote de evento de botão.
          * Apenas funciona se estiver conectado.
          */
-        suspend fun sendButtonPacket(packet: ButtonPacket) {
+        open suspend fun sendButtonPacket(packet: ButtonPacket) {
             if (isConnected()) {
                 udpClient.sendButton(packet)
             }

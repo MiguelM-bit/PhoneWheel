@@ -1,6 +1,17 @@
 package com.phonewheel.sensor
 
 import kotlin.math.absoluteValue
+import kotlin.math.pow
+
+private const val RESPONSE_CURVE_REF_DEG_PER_SEC = 90f
+private const val RESPONSE_CURVE_GAMMA = 0.85f
+
+internal fun applyResponseCurve(velocityDegPerSec: Float): Float {
+    if (velocityDegPerSec == 0f) return 0f
+    val sign = if (velocityDegPerSec > 0f) 1f else -1f
+    val magnitude = velocityDegPerSec.absoluteValue / RESPONSE_CURVE_REF_DEG_PER_SEC
+    return sign * RESPONSE_CURVE_REF_DEG_PER_SEC * magnitude.pow(RESPONSE_CURVE_GAMMA)
+}
 
 /**
  * Processa dados do giroscópio para calcular o ângulo de direção.
@@ -70,7 +81,7 @@ class SteeringProcessor(
         val angularVelocityDegPerSec = Math.toDegrees(angularVelocityRadPerSec.toDouble()).toFloat()
 
         // Aplicar sensibilidade
-        val adjustedVelocity = angularVelocityDegPerSec * sensitivity
+        val adjustedVelocity = sensitivity * applyResponseCurve(angularVelocityDegPerSec)
 
         // Integrar: angle += angularVelocity * deltaTime
         val deltaAngle = adjustedVelocity * deltaTimeSeconds

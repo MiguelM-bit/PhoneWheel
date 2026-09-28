@@ -125,7 +125,7 @@ class GamepadManager(
             } else {
                 null
             }
-            if (range == null && !device.hasAxis(axis)) continue
+            if (axis.kind != GamepadAxis.Kind.TRIGGER && range == null && !device.hasAxis(axis)) continue
 
             val raw = event.getAxisValue(axis.motionAxis)
             val min = range?.min ?: if (axis.kind == GamepadAxis.Kind.TRIGGER) 0f else -1f

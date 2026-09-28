@@ -2,6 +2,7 @@ package com.phonewheel.network
 
 import com.phonewheel.connection.ConnectionManager
 import com.phonewheel.model.ButtonPacket
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,7 +20,7 @@ import kotlinx.coroutines.launch
  *   deixar um botão "preso" no controle virtual do Windows.
  *
  * O estado de pressionamento combina origens (toque e gamepad) com OR
- * lógico via [ButtonPressMerger], na thread da UI.
+ * lógico via [ButtonPressMerger].
  */
 class ButtonSender(
     private val connectionManager: ConnectionManager,
@@ -31,15 +32,18 @@ class ButtonSender(
         const val ORIGIN_GAMEPAD = "gamepad"
     }
 
+    var onReleaseAll: (() -> Unit)? = null
+
     private val merger = ButtonPressMerger()
+    private val events = ArrayDeque<ButtonEvent>()
+    private var processing = false
 
     /**
      * Pressiona o botão [button] pela origem [origin].
      * Só envia se nenhuma outra origem já o mantinha pressionado.
      */
     fun press(button: Int, origin: String = ORIGIN_TOUCH) {
-        if (!merger.press(button, origin)) return
-        send(button, pressed = true)
+        enqueue(ButtonEvent.Press(button, origin))
     }
 
     /**
@@ -47,8 +51,7 @@ class ButtonSender(
      * Só envia release se nenhuma outra origem continuar pressionando.
      */
     fun release(button: Int, origin: String = ORIGIN_TOUCH) {
-        if (!merger.release(button, origin)) return
-        send(button, pressed = false)
+        enqueue(ButtonEvent.Release(button, origin))
     }
 
     /**
@@ -57,19 +60,85 @@ class ButtonSender(
      * para que o servidor não fique com um botão "preso" no controle virtual.
      */
     suspend fun releaseAll() {
-        val pressed = merger.clearAll()
-        for (button in pressed) {
-            connectionManager.sendButtonPacket(
-                ButtonPacket(button = button, pressed = false)
-            )
+        val done = CompletableDeferred<Unit>()
+        enqueue(ButtonEvent.ReleaseAll(done))
+        done.await()
+        onReleaseAll?.invoke()
+    }
+
+    private fun enqueue(event: ButtonEvent) {
+        val startProcessing: Boolean
+        synchronized(events) {
+            events.addLast(event)
+            startProcessing = !processing
+            if (startProcessing) processing = true
+        }
+        if (startProcessing) {
+            scope.launch { processEvents() }
         }
     }
 
-    private fun send(button: Int, pressed: Boolean) {
-        scope.launch {
-            connectionManager.sendButtonPacket(
-                ButtonPacket(button = button, pressed = pressed)
-            )
+    private suspend fun processEvents() {
+        while (true) {
+            val event: ButtonEvent = synchronized(events) {
+                if (events.isEmpty()) {
+                    processing = false
+                    null
+                } else {
+                    events.removeFirst()
+                }
+            } ?: return
+            try {
+                handle(event)
+            } catch (t: Throwable) {
+                synchronized(events) { processing = false }
+                throw t
+            }
         }
     }
+
+    private suspend fun handle(event: ButtonEvent) {
+        when (event) {
+            is ButtonEvent.Press -> handlePress(event)
+            is ButtonEvent.Release -> handleRelease(event)
+            is ButtonEvent.ReleaseAll -> handleReleaseAll(event)
+        }
+    }
+
+    private suspend fun handlePress(event: ButtonEvent.Press) {
+        if (!merger.press(event.button, event.origin)) return
+        if (connectionManager.isConnected()) {
+            connectionManager.sendButtonPacket(
+                ButtonPacket(button = event.button, pressed = true)
+            )
+        } else {
+            merger.release(event.button, event.origin)
+        }
+    }
+
+    private suspend fun handleRelease(event: ButtonEvent.Release) {
+        if (!merger.release(event.button, event.origin)) return
+        connectionManager.sendButtonPacket(
+            ButtonPacket(button = event.button, pressed = false)
+        )
+    }
+
+    private suspend fun handleReleaseAll(event: ButtonEvent.ReleaseAll) {
+        try {
+            val pressed = merger.clearAll()
+            for (button in pressed) {
+                connectionManager.sendButtonPacket(
+                    ButtonPacket(button = button, pressed = false)
+                )
+            }
+        } finally {
+            event.done.complete(Unit)
+        }
+    }
+}
+
+private sealed interface ButtonEvent {
+    data class Press(val button: Int, val origin: String) : ButtonEvent
+    data class Release(val button: Int, val origin: String) : ButtonEvent
+    class ReleaseAll(val done: CompletableDeferred<Unit>) : ButtonEvent
 }

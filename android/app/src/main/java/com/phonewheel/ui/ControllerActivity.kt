@@ -236,7 +236,7 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
             invertLeftY = binding.leftStick.invertY
             invertRightX = binding.rightStick.invertX
             invertRightY = binding.rightStick.invertY
-            sensitivityLevel = settings.wheelSensitivityLevel
+            sensitivityValue = settings.getWheelSensitivityValue()
             confirmDisconnect = settings.confirmDisconnect
         }
 
@@ -299,8 +299,8 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
         settings.invertRightY = enabled
     }
 
-    override fun onSensitivityChanged(level: Int) {
-        settings.wheelSensitivityLevel = level
+    override fun onSensitivityChanged(value: Float) {
+        settings.wheelSensitivity = value
         applyWheelSensitivity()
     }
 
@@ -656,7 +656,7 @@ class ControllerActivity : AppCompatActivity(), SettingsOverlayView.Callback {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         if (settingsOverlay != null) {
-            hideSettingsOverlay()
+            onSettingsClose()
         } else {
             super.onBackPressed()
         }

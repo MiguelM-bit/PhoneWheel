@@ -11,13 +11,11 @@ class SensitivityManager(
     var sensitivity: Float = 1.0f
 ) {
     
-    private val MIN_SENSITIVITY = 0.1f
-    private val MAX_SENSITIVITY = 5.0f
-    
+    private val MIN_SENSITIVITY = 0.5f
+    private val MAX_SENSITIVITY = 3.0f
+
     fun set(value: Float) {
-        if (value in MIN_SENSITIVITY..MAX_SENSITIVITY) {
-            sensitivity = value
-        }
+        sensitivity = value.coerceIn(MIN_SENSITIVITY, MAX_SENSITIVITY)
     }
     
     fun increase() {

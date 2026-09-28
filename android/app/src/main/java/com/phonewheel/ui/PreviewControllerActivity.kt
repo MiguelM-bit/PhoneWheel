@@ -177,23 +177,8 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
     // -------------------------------------------------------------------------
 
     private fun setupWheelControls() {
-        binding.dpad.sender = null
-
-        binding.leftStick.stickId = StickId.LEFT
-        binding.leftStick.axisSender = null
-
-        binding.rightStick.stickId = StickId.RIGHT
-        binding.rightStick.axisSender = null
-
-        configureButton(binding.buttonA, 0, getString(R.string.button_a))
-        configureButton(binding.buttonB, 1, getString(R.string.button_b))
-        configureButton(binding.buttonX, 2, getString(R.string.button_x))
-        configureButton(binding.buttonY, 3, getString(R.string.button_y))
-        configureButton(binding.buttonLB, 4, getString(R.string.button_lb))
-        configureButton(binding.buttonRB, 5, getString(R.string.button_rb))
-        configureButton(binding.buttonLT, 14, getString(R.string.button_lt))
-        configureButton(binding.buttonRT, 15, getString(R.string.button_rt))
-        configureButton(binding.buttonRS, 7, getString(R.string.button_rs))
+        setupControls()
+        binding.leftStick.wheelMode = true
     }
 
     private fun setupRecenterButton() {
@@ -237,7 +222,7 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
             invertLeftY = binding.leftStick.invertY
             invertRightX = binding.rightStick.invertX
             invertRightY = binding.rightStick.invertY
-            sensitivityLevel = settings.wheelSensitivityLevel
+            sensitivityValue = settings.getWheelSensitivityValue()
             confirmDisconnect = settings.confirmDisconnect
         }
 
@@ -297,8 +282,8 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
         settings.invertRightY = enabled
     }
 
-    override fun onSensitivityChanged(level: Int) {
-        settings.wheelSensitivityLevel = level
+    override fun onSensitivityChanged(value: Float) {
+        settings.wheelSensitivity = value
         applyWheelSensitivity()
     }
 
@@ -489,10 +474,7 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
         controlsReleased = true
 
         if (wheelModeEnabled) {
-            wheelModeEnabled = false
-            binding.leftStick.wheelMode = false
             gyroscopeManager?.stopListening()
-            gyroscopeManager?.removeOnSensorDataChangedListener()
         }
 
         // Zera todos os botões visualmente (senders são null, nada para enviar)
@@ -575,7 +557,7 @@ class PreviewControllerActivity : AppCompatActivity(), SettingsOverlayView.Callb
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         if (settingsOverlay != null) {
-            hideSettingsOverlay()
+            onSettingsClose()
         } else {
             super.onBackPressed()
         }

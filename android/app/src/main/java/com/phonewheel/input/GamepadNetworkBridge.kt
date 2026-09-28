@@ -28,15 +28,21 @@ class GamepadNetworkBridge(
         apply(GamepadState())
     }
 
+    fun resetButtons() {
+        synchronized(lastButtons) { lastButtons.clear() }
+    }
+
     private fun syncButtons(next: Set<Int>) {
-        for (id in lastButtons - next) {
-            releaseButton?.invoke(id)
+        synchronized(lastButtons) {
+            for (id in lastButtons - next) {
+                releaseButton?.invoke(id)
+            }
+            for (id in next - lastButtons) {
+                pressButton?.invoke(id)
+            }
+            lastButtons.clear()
+            lastButtons.addAll(next)
         }
-        for (id in next - lastButtons) {
-            pressButton?.invoke(id)
-        }
-        lastButtons.clear()
-        lastButtons.addAll(next)
     }
 
     private fun syncAxes(state: GamepadState) {
